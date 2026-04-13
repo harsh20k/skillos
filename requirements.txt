@@ -1,0 +1,4 @@
+anthropic>=0.25.0
+PyGithub>=2.1.1
+slack-bolt>=1.18.0
+boto3>=1.34.0
