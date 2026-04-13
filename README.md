@@ -21,12 +21,14 @@ Agents are orchestrated using **LangGraph** (supervisor + subgraph pattern), wit
 
 ## Agent design
 
-| Agent | Trigger | LLM Call | Guardrail |
-|---|---|---|---|
-| Intake Agent | User message / onboarding | Yes — goal scoping per skill | Rejects vague goals; prompts one skill at a time |
-| Planner Agent | EventBridge 08:00 | Yes — cross-skill task generation | No task > 30 min; 3–5 tasks total across all active skills |
-| Skip Detector | EventBridge 23:00 | No — pure logic | Caps rollover at 2 tasks *per skill*, evaluated independently |
-| Tracker Agent | Slack `/done <skill>` | Yes — progress note + node unlock | Dry-run diff before commit; errors if skill name not recognised |
+
+| Agent         | Trigger                   | LLM Call                          | Guardrail                                                       |
+| ------------- | ------------------------- | --------------------------------- | --------------------------------------------------------------- |
+| Intake Agent  | User message / onboarding | Yes — goal scoping per skill      | Rejects vague goals; prompts one skill at a time                |
+| Planner Agent | EventBridge 08:00         | Yes — cross-skill task generation | No task > 30 min; 3–5 tasks total across all active skills      |
+| Skip Detector | EventBridge 23:00         | No — pure logic                   | Caps rollover at 2 tasks *per skill*, evaluated independently   |
+| Tracker Agent | Slack `/done <skill>`     | Yes — progress note + node unlock | Dry-run diff before commit; errors if skill name not recognised |
+
 
 Each agent runs as its own **stateless Lambda function**. Context is reconstructed fresh from GitHub + S3 on every invocation — no persistent agent process in memory.
 
@@ -90,13 +92,15 @@ API Gateway          ──→ Tracker Lambda  ←── Slack /done
 
 ## Slack commands
 
-| Command | Action |
-|---|---|
-| `/done <skill>` | Triggers Tracker Lambda for the named skill, commits progress, unlocks nodes — e.g. `/done portrait` |
-| `/skip <skill>` | Explicit skip for a specific skill, sets rollover flag early — e.g. `/skip public-speaking` |
-| `/harder <skill>` | Signals Planner to increase next day's difficulty for that skill |
-| `/easier <skill>` | Signals Planner to reduce difficulty for that skill |
-| `/skills` | Lists all active skills and today's task count per skill |
+
+| Command           | Action                                                                                               |
+| ----------------- | ---------------------------------------------------------------------------------------------------- |
+| `/done <skill>`   | Triggers Tracker Lambda for the named skill, commits progress, unlocks nodes — e.g. `/done portrait` |
+| `/skip <skill>`   | Explicit skip for a specific skill, sets rollover flag early — e.g. `/skip public-speaking`          |
+| `/harder <skill>` | Signals Planner to increase next day's difficulty for that skill                                     |
+| `/easier <skill>` | Signals Planner to reduce difficulty for that skill                                                  |
+| `/skills`         | Lists all active skills and today's task count per skill                                             |
+
 
 ---
 
@@ -185,3 +189,4 @@ skillos/
 ├── requirements.txt
 └── README.md
 ```
+
