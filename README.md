@@ -140,6 +140,18 @@ API Gateway          ──→ Tracker Lambda  ←── Slack /done
 
 ---
 
+## Deploying Lambdas (dependency layer)
+
+Python third-party packages are **not** bundled in the function zip. Before `terraform apply`, build the shared **Lambda layer** (requires [Docker](https://docs.docker.com/engine/install/)):
+
+```bash
+./scripts/build_lambda_layer.sh
+```
+
+This installs `requirements.txt` into `infra/layer-build/python` using the SAM `build-python3.12` image (`linux/amd64` by default) so wheels match Lambda **x86_64**. Then run Terraform from `infra/` as usual. To rebuild after dependency changes, run the script again.
+
+---
+
 ## Project status
 
 Proof of concept — not production ready. Built to demonstrate multi-agent architecture depth, guardrail design, LangGraph orchestration patterns, and AWS serverless deployment.

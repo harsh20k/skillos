@@ -23,6 +23,8 @@ build/
 *.tfstate.backup
 *.tfvars
 .terraform.lock.hcl
+infra/layer-build/
+infra/skillos-layer.zip
 
 # Secrets
 secrets.json

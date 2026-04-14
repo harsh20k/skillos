@@ -1,5 +1,31 @@
 # ---------------------------------------------------------------------------
-# Lambda source package
+# Lambda layer (third-party deps) — build first: ../scripts/build_lambda_layer.sh
+# ---------------------------------------------------------------------------
+
+data "archive_file" "skillos_layer" {
+  type        = "zip"
+  source_dir  = "${path.module}/layer-build"
+  output_path = "${path.module}/skillos-layer.zip"
+  excludes    = [".DS_Store"]
+
+  lifecycle {
+    precondition {
+      condition     = length(fileset("${path.module}/layer-build/python", "**")) > 0
+      error_message = "Lambda layer is empty or missing. From repo root run: ./scripts/build_lambda_layer.sh (requires Docker), then re-run Terraform."
+    }
+  }
+}
+
+resource "aws_lambda_layer_version" "skillos_deps" {
+  layer_name               = "skillos-python-deps"
+  filename                 = data.archive_file.skillos_layer.output_path
+  compatible_runtimes      = ["python3.12"]
+  compatible_architectures = ["x86_64"]
+  source_code_hash         = data.archive_file.skillos_layer.output_base64sha256
+}
+
+# ---------------------------------------------------------------------------
+# Lambda source package (application code only; deps in layer above)
 # ---------------------------------------------------------------------------
 
 data "archive_file" "skillos" {
@@ -69,6 +95,8 @@ resource "aws_iam_role_policy" "lambda_policy" {
 # ---------------------------------------------------------------------------
 
 locals {
+  lambda_layers = [aws_lambda_layer_version.skillos_deps.arn]
+
   common_env = {
     GITHUB_REPO          = var.github_repo
     GITHUB_BRANCH        = var.github_branch
@@ -89,6 +117,7 @@ resource "aws_lambda_function" "intake" {
   function_name    = "skillos-intake"
   filename         = data.archive_file.skillos.output_path
   source_code_hash = data.archive_file.skillos.output_base64sha256
+  layers           = local.lambda_layers
   handler          = "agents.intake.handler.lambda_handler"
   runtime          = "python3.12"
   role             = aws_iam_role.lambda_exec.arn
@@ -103,6 +132,7 @@ resource "aws_lambda_function" "planner" {
   function_name    = "skillos-planner"
   filename         = data.archive_file.skillos.output_path
   source_code_hash = data.archive_file.skillos.output_base64sha256
+  layers           = local.lambda_layers
   handler          = "agents.planner.handler.lambda_handler"
   runtime          = "python3.12"
   role             = aws_iam_role.lambda_exec.arn
@@ -117,6 +147,7 @@ resource "aws_lambda_function" "skip_detector" {
   function_name    = "skillos-skip-detector"
   filename         = data.archive_file.skillos.output_path
   source_code_hash = data.archive_file.skillos.output_base64sha256
+  layers           = local.lambda_layers
   handler          = "agents.skip_detector.handler.lambda_handler"
   runtime          = "python3.12"
   role             = aws_iam_role.lambda_exec.arn
@@ -131,6 +162,7 @@ resource "aws_lambda_function" "tracker" {
   function_name    = "skillos-tracker"
   filename         = data.archive_file.skillos.output_path
   source_code_hash = data.archive_file.skillos.output_base64sha256
+  layers           = local.lambda_layers
   handler          = "agents.tracker.handler.lambda_handler"
   runtime          = "python3.12"
   role             = aws_iam_role.lambda_exec.arn
@@ -145,6 +177,7 @@ resource "aws_lambda_function" "slack_bot" {
   function_name    = "skillos-slack-bot"
   filename         = data.archive_file.skillos.output_path
   source_code_hash = data.archive_file.skillos.output_base64sha256
+  layers           = local.lambda_layers
   handler          = "slack.bot.lambda_handler"
   runtime          = "python3.12"
   role             = aws_iam_role.lambda_exec.arn
@@ -164,8 +197,8 @@ resource "aws_lambda_function" "slack_bot" {
 # Outputs
 # ---------------------------------------------------------------------------
 
-output "intake_lambda_name"       { value = aws_lambda_function.intake.function_name }
-output "planner_lambda_name"      { value = aws_lambda_function.planner.function_name }
+output "intake_lambda_name" { value = aws_lambda_function.intake.function_name }
+output "planner_lambda_name" { value = aws_lambda_function.planner.function_name }
 output "skip_detector_lambda_name" { value = aws_lambda_function.skip_detector.function_name }
-output "tracker_lambda_name"      { value = aws_lambda_function.tracker.function_name }
-output "slack_bot_lambda_name"    { value = aws_lambda_function.slack_bot.function_name }
+output "tracker_lambda_name" { value = aws_lambda_function.tracker.function_name }
+output "slack_bot_lambda_name" { value = aws_lambda_function.slack_bot.function_name }
