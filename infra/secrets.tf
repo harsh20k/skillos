@@ -5,7 +5,7 @@
 #   skillos/github-token         — GitHub personal access token (repo read/write)
 #   skillos/slack-bot-token      — Slack bot OAuth token (xoxb-...)
 #   skillos/slack-signing-secret — Slack app signing secret
-#   skillos/langchain-api-key    — LangSmith API key (for tracing)
+#   skillos/langsmith-api-key    — LangSmith API key (for tracing)
 
 data "aws_secretsmanager_secret" "github_token" {
   name = "skillos/github-token"
@@ -31,10 +31,10 @@ data "aws_secretsmanager_secret_version" "slack_signing_secret" {
   secret_id = data.aws_secretsmanager_secret.slack_signing_secret.id
 }
 
-data "aws_secretsmanager_secret" "langchain_api_key" {
-  name = "skillos/langchain-api-key"
+data "aws_secretsmanager_secret" "langsmith_api_key" {
+  name = "skillos/langsmith-api-key"
 }
 
-data "aws_secretsmanager_secret_version" "langchain_api_key" {
-  secret_id = data.aws_secretsmanager_secret.langchain_api_key.id
+data "aws_secretsmanager_secret_version" "langsmith_api_key" {
+  secret_id = data.aws_secretsmanager_secret.langsmith_api_key.id
 }

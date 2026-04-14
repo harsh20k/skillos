@@ -1,0 +1,128 @@
+---
+creation date: 2026-02-11 07:56
+tags:
+description:
+---
+**Registered Exhibitors Include:**
+
+- **Sun Life** — Large financial services; software, cloud, data, and ML/AI teams.
+- **Fleetway Inc.** — Defence/marine engineering; systems, software, and modelling roles.
+- **Irving Shipbuilding** — Industrial/defence; IT, software, systems, and data roles.
+- **Strum Consulting** — Engineering consultancy; data, GIS, and engineering software.
+- **EfficiencyOne** — Energy-efficiency org using data, analytics, and software tools.
+
+- [**_Citco Canada Inc_**](https://www.citco.com/) (Event Sponsor!)
+- [**_ECO Canada_**](https://eco.ca/) (Event Sponsor!)
+- A-Way To Work - International Rural Exchange Canada
+- Autism Nova Scotia
+- BDO Canada Limited
+- Bird Construction
+- BWXT Nuclear Energy Canada Inc.
+- Canada Armed Forces: Army Reserves
+- Canadian Armed Forces
+- Canadian College of Naturopathic Medicine
+- Carbon Management Canada
+- Central Overseas Education Services
+- Clean Foundation
+- CNS Accounting Solutions Ltd.
+- Conseil Scolaire Acadien Provincial
+- CPA Atlantic School of Business
+- Dalhousie University - Faculty of Management Graduate Programs 
+- Dalhousie University: Event & Conference Services
+- ECO Canada
+- Emera Inc
+- Fuel 4 the Future
+- Gateway Homes
+- Girl Guides of Canada
+- Global Relay Communications
+- Government of Nova Scotia
+- Halifax Citadel Society
+- Halifax Darthmouth Bridge Commission
+- IG Wealth Management
+- J.D. Irving Limited
+- Kiewit
+- Lindsay Construction Limited
+- Maritime Renewable Solutions
+- Mark Anthony Group Inc.
+- Modern Niagara
+- NL Health Services
+- NS Health
+- O'Regan's Automotive Group
+- Official Languages Programs - programmes de langues officielles(OLP-PLO)
+- Otis Canada Inc
+- Phasor Engineering
+- PowerCo Canada Inc.
+- R.V. Anderson Associates Limited
+- R&R Pools
+- Saint John Region
+- SDMM
+- Shannex
+- Sobey School of Business, Saint Mary's University 
+- Stewart McKelvey
+- TEAM Work Cooperative
+- The Career Foundation
+- The Confederacy of Mainland Mi'kmaq
+- The Department of Public Works: Building Infrastructure Design and Construction
+- Tlicho Community Services Agency/GNWT
+- University of New Brunswick - School of Graduate Studies
+- Up With Women
+- UPEI McDougall Faculty of Business
+- Vantage Marketing Canada**Registered Exhibitors Include:**
+
+- [**_Citco Canada Inc_**](https://www.citco.com/) (Event Sponsor!)
+- [**_ECO Canada_**](https://eco.ca/) (Event Sponsor!)
+- A-Way To Work - International Rural Exchange Canada
+- Autism Nova Scotia
+- BDO Canada Limited
+- Bird Construction
+- BWXT Nuclear Energy Canada Inc.
+- Canada Armed Forces: Army Reserves
+- Canadian Armed Forces
+- Canadian College of Naturopathic Medicine
+- Carbon Management Canada
+- Central Overseas Education Services
+- Clean Foundation
+- CNS Accounting Solutions Ltd.
+- Conseil Scolaire Acadien Provincial
+- CPA Atlantic School of Business
+- Dalhousie University - Faculty of Management Graduate Programs 
+- Dalhousie University: Event & Conference Services
+- ECO Canada
+- Emera Inc
+- Fuel 4 the Future
+- Gateway Homes
+- Girl Guides of Canada
+- Global Relay Communications
+- Government of Nova Scotia
+- Halifax Citadel Society
+- Halifax Darthmouth Bridge Commission
+- IG Wealth Management
+- J.D. Irving Limited
+- Kiewit
+- Lindsay Construction Limited
+- Maritime Renewable Solutions
+- Mark Anthony Group Inc.
+- Modern Niagara
+- NL Health Services
+- NS Health
+- O'Regan's Automotive Group
+- Official Languages Programs - programmes de langues officielles(OLP-PLO)
+- Otis Canada Inc
+- Phasor Engineering
+- PowerCo Canada Inc.
+- R.V. Anderson Associates Limited
+- R&R Pools
+- Saint John Region
+- SDMM
+- Shannex
+- Sobey School of Business, Saint Mary's University 
+- Stewart McKelvey
+- TEAM Work Cooperative
+- The Career Foundation
+- The Confederacy of Mainland Mi'kmaq
+- The Department of Public Works: Building Infrastructure Design and Construction
+- Tlicho Community Services Agency/GNWT
+- University of New Brunswick - School of Graduate Studies
+- Up With Women
+- UPEI McDougall Faculty of Business
+- Vantage Marketing Canada

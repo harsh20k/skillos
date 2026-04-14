@@ -1,0 +1,24 @@
+{
+	"nodes":[
+		{"id":"3c729e8409a3edf1","type":"group","x":0,"y":-400,"width":340,"height":620,"label":"Prompt"},
+		{"id":"ce1b2ed9bc44139f","type":"group","x":-960,"y":-420,"width":290,"height":410,"label":"Example writing"},
+		{"id":"f670e81dab9e01e7","type":"text","text":"Your text examples.","x":-940,"y":-400,"width":250,"height":60,"color":"5"},
+		{"id":"e0bac15231266ee7","type":"text","text":"Your text examples.","x":-940,"y":-198,"width":250,"height":60,"color":"5"},
+		{"id":"8fe16a0c486ba6b6","type":"text","text":"Your text examples.","x":-940,"y":-300,"width":250,"height":50,"color":"5"},
+		{"id":"8a411b7bed13bd0e","type":"text","text":"# Prompt/Framework","x":20,"y":-380,"width":296,"height":60,"color":"6"},
+		{"id":"bedee12c8e5558a4","type":"file","file":"Archive/Post-Prompt-Framework.md","x":20,"y":-280,"width":300,"height":480},
+		{"id":"f6de8992cc88985f","type":"text","text":"## Extracted tone/style guide.","x":-578,"y":-40,"width":416,"height":100,"color":"1"},
+		{"id":"a114d5f1f8a04bc8","type":"text","text":"Your text examples.","x":-940,"y":-90,"width":250,"height":60,"color":"5"},
+		{"id":"d987f16d9b1f9ff0","type":"text","text":"## Extraction Prompt","x":-578,"y":-250,"width":416,"height":69,"color":"4"},
+		{"id":"80aef5b1dbc15f5b","type":"file","file":"Archive/Extraction Prompt.md","x":-578,"y":-550,"width":416,"height":200},
+		{"id":"327b8fe875e35549","type":"text","text":"Flow: https://www.sharecanvas.io/p/linkedin-framework\nPrompt/Framework: https://share.note.sx/cu5j1u2x#KUq0pBJ5wzHSJqRnZpdAZLArgUFxUtlpG4y5+7h4y1M\nStyle Extraction Prompt: https://share.note.sx/9c8eca62#V2W1njkNkXwuEHjY/aWfjzwYWSY7X3m1bazQE1yJmQs\n\n\n","x":-752,"y":440,"width":1180,"height":100},
+		{"id":"a5d93e36f5a04cac","type":"text","text":"# Final Post","x":428,"y":-120,"width":250,"height":60}
+	],
+	"edges":[
+		{"id":"47f75011a8948757","fromNode":"f6de8992cc88985f","fromSide":"right","toNode":"3c729e8409a3edf1","toSide":"left"},
+		{"id":"4fb1e776eb682523","fromNode":"3c729e8409a3edf1","fromSide":"right","toNode":"a5d93e36f5a04cac","toSide":"left"},
+		{"id":"feb4e39fcf6bcb64","fromNode":"ce1b2ed9bc44139f","fromSide":"right","toNode":"d987f16d9b1f9ff0","toSide":"left"},
+		{"id":"d150e01f1c3a405b","fromNode":"d987f16d9b1f9ff0","fromSide":"bottom","toNode":"f6de8992cc88985f","toSide":"top","label":"One Time Extraction"},
+		{"id":"85118619faeb6c39","fromNode":"80aef5b1dbc15f5b","fromSide":"bottom","toNode":"d987f16d9b1f9ff0","toSide":"top"}
+	]
+}

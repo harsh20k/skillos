@@ -6,7 +6,7 @@ This guide picks up from where you are now and walks through the remaining deplo
 
 - You are in repo root: `skillos/`
 - Docker is running
-- You can use AWS profile with create permissions (recommended: `tf-provisioner`)
+- You can use AWS profile with create permissions (recommended: `tf_provisioner_janakfoto`)
 - You have a GitHub fine-grained PAT for the **data repo** with:
   - Contents: Read and write
   - Metadata: Read-only
@@ -27,15 +27,15 @@ If `skillos-terraform-state` is stuck in `OperationAborted`, use a unique bucket
 
 ```bash
 aws s3api create-bucket \
-  --bucket skillos-terraform-state-411960113601 \
+  --bucket skillos-terraform-state-965384155969 \
   --region us-east-1 \
-  --profile tf-provisioner
+  --profile tf_provisioner_janakfoto
 
 aws s3api put-bucket-versioning \
-  --bucket skillos-terraform-state-411960113601 \
+  --bucket skillos-terraform-state-965384155969 \
   --versioning-configuration Status=Enabled \
   --region us-east-1 \
-  --profile tf-provisioner
+  --profile tf_provisioner_janakfoto
 ```
 
 ## 3) Update Terraform backend bucket
@@ -44,7 +44,7 @@ In `infra/main.tf`, set the backend bucket to the new unique bucket:
 
 ```hcl
 backend "s3" {
-  bucket = "skillos-terraform-state-411960113601"
+  bucket = "skillos-terraform-state-965384155969"
   key    = "skillos/terraform.tfstate"
   region = "us-east-1"
 }
@@ -67,25 +67,25 @@ aws secretsmanager create-secret \
   --name skillos/github-token \
   --secret-string 'YOUR_GITHUB_PAT' \
   --region us-east-1 \
-  --profile tf-provisioner
+  --profile tf_provisioner_janakfoto
 
 aws secretsmanager create-secret \
   --name skillos/slack-bot-token \
   --secret-string 'xoxb-...' \
   --region us-east-1 \
-  --profile tf-provisioner
+  --profile tf_provisioner_janakfoto
 
 aws secretsmanager create-secret \
   --name skillos/slack-signing-secret \
   --secret-string 'YOUR_SLACK_SIGNING_SECRET' \
   --region us-east-1 \
-  --profile tf-provisioner
+  --profile tf_provisioner_janakfoto
 
 aws secretsmanager create-secret \
-  --name skillos/langchain-api-key \
-  --secret-string 'ls__...' \
+  --name skillos/langsmith-api-key \
+  --secret-string 'lsv2_...' \
   --region us-east-1 \
-  --profile tf-provisioner
+  --profile tf_provisioner_janakfoto
 ```
 
 If a secret already exists, update it:
@@ -95,7 +95,7 @@ aws secretsmanager put-secret-value \
   --secret-id skillos/github-token \
   --secret-string 'NEW_VALUE' \
   --region us-east-1 \
-  --profile tf-provisioner
+  --profile tf_provisioner_janakfoto
 ```
 
 ## 5) Set `infra/terraform.tfvars`
@@ -107,6 +107,7 @@ github_repo = "OWNER/YOUR_SKILLOS_DATA_REPO"
 ```
 
 Notes:
+
 - `github_repo` is the **knowledge/skills repo** (not necessarily this code repo).
 - Do not put secret values in tfvars.
 
@@ -147,33 +148,35 @@ terraform apply -var-file=terraform.tfvars
 ```
 
 Capture output:
+
 - `slack_webhook_url`
+[https://wf4wtgp1k9.execute-api.us-east-1.amazonaws.com//slack/events](https://wf4wtgp1k9.execute-api.us-east-1.amazonaws.com//slack/events)
 
 ## 8) Slack wiring
 
 In Slack App config:
 
 1. Create slash commands:
-   - `/learn`
-   - `/done`
-   - `/skip`
-   - `/harder`
-   - `/easier`
-   - `/skills`
+  - `/learn`
+  - `/done`
+  - `/skip`
+  - `/harder`
+  - `/easier`
+  - `/skills`
 2. Set each Request URL to:
-   - `<slack_webhook_url>/slack/events` (Terraform output already includes `/slack/events`; use exactly output value)
+  - `<slack_webhook_url>/slack/events` (Terraform output already includes `/slack/events`; use exactly output value)
 3. Install/reinstall app to workspace if needed.
 
 ## 9) Smoke tests
 
 1. Lambda console:
-   - invoke `skillos-planner` with `{}`
-   - invoke `skillos-skip-detector` with `{}`
+  - invoke `skillos-planner` with `{}`
+  - invoke `skillos-skip-detector` with `{}`
 2. Slack:
-   - `/skills`
-   - `/learn I want to learn portrait sketching`
+  - `/skills`
+  - `/learn I want to learn portrait sketching`
 3. CloudWatch:
-   - check `/aws/lambda/skillos-*` logs for runtime errors
+  - check `/aws/lambda/skillos-*` logs for runtime errors
 
 ## 10) Common failures and fixes
 

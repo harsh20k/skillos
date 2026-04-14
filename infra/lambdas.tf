@@ -73,13 +73,24 @@ resource "aws_iam_role_policy" "lambda_policy" {
       },
       {
         Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = "arn:aws:s3:::${var.s3_state_bucket}"
+      },
+      {
+        Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
         Resource = "*"
       },
       {
         Effect   = "Allow"
-        Action   = ["bedrock:InvokeModel"]
-        Resource = "*"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream"
+        ]
+        Resource = [
+          "arn:aws:bedrock:*::foundation-model/*",
+          "arn:aws:bedrock:*:*:inference-profile/*"
+        ]
       },
       {
         Effect   = "Allow"
@@ -101,10 +112,9 @@ locals {
     GITHUB_REPO          = var.github_repo
     GITHUB_BRANCH        = var.github_branch
     S3_BUCKET            = var.s3_state_bucket
-    AWS_REGION           = var.aws_region
     BEDROCK_MODEL_ID     = var.bedrock_model_id
     LANGCHAIN_TRACING_V2 = "true"
-    LANGCHAIN_API_KEY    = data.aws_secretsmanager_secret_version.langchain_api_key.secret_string
+    LANGCHAIN_API_KEY    = data.aws_secretsmanager_secret_version.langsmith_api_key.secret_string
     GITHUB_TOKEN         = data.aws_secretsmanager_secret_version.github_token.secret_string
   }
 }

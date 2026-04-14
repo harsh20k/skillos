@@ -1,0 +1,27 @@
+{
+	"nodes":[
+		{"id":"924c8f4c85a97aa5","type":"text","text":"## Technical Skills and Craft","x":-320,"y":-271,"width":320,"height":111,"color":"2"},
+		{"id":"1b966c052243316e","type":"text","text":"### **What you are learning and building technically.**\n\nHands-on work with code, systems, tools, architectures, bugs, frameworks, architecture patterns, design trade-offs and design decisions that show how you think as an engineer.","x":-878,"y":-497,"width":478,"height":266,"color":"2"},
+		{"id":"e517ab76edc174b3","type":"text","text":"### **How you are growing as an IT professional.**\n\nWhat you built, shipped, tried, broke, or debugged—proof that you can apply knowledge and execute, not just study theory.","x":-877,"y":-172,"width":477,"height":213,"color":"1"},
+		{"id":"d48fa02b3b7ab8ad","type":"text","text":"### **Who you are becoming, not just what you know.**\n\nCommunication, teamwork, discipline, resilience, ethics, and the inner work that shapes a reliable, trustworthy professional.","x":500,"y":-321,"width":440,"height":201,"color":"6"},
+		{"id":"bcb3d50beec335eb","type":"text","text":"## Professional Growth & Industry Awareness","x":62,"y":-215,"width":340,"height":116,"color":"5"},
+		{"id":"a27382a5fc688650","type":"text","text":"## Projects and Execution ","x":-320,"y":-99,"width":320,"height":106,"color":"1"},
+		{"id":"58e5d0211b260541","type":"text","text":"### Mindset, values & Philosophy","x":62,"y":-391,"width":340,"height":120,"color":"6"},
+		{"id":"b35608d228769cb0","type":"text","text":"### **How you understand the broader tech landscape.**\n\nHow you’re developing as a working professional—teamwork, communication, understanding roles, career navigation, and industry context.","x":500,"y":-85,"width":440,"height":205,"color":"5"},
+		{"id":"fa8c3976633f72a4","type":"file","file":"Admin/Assets/Pasted image 20251218130234.png","x":142,"y":-720,"width":180,"height":240,"color":"6"},
+		{"id":"fa6aaaddceec4233","type":"file","file":"Admin/Assets/Pasted image 20251218130400.png","x":-302,"y":-524,"width":285,"height":160,"color":"2"},
+		{"id":"127b5b6d02623aa0","type":"file","file":"Admin/Assets/Pasted image 20251218130310.png","x":142,"y":1,"width":180,"height":240,"color":"5"},
+		{"id":"0851d8c084c358ce","type":"file","file":"Admin/Assets/Pasted image 20251218130440.png","x":-302,"y":120,"width":285,"height":160,"color":"1"},
+		{"id":"af4dc040834d3d70","type":"text","text":"\n| Category                                     | Core Focus                             | What It Covers                                                                                                                                                               |\n| -------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |\n| **Technical Skills & Craft**                 | How you think and build as an engineer | Hands-on work with code, systems, tools, architectures, patterns, trade-offs, debugging, and design decisions that reflect your technical depth and problem-solving ability. |\n| **Projects & Execution**                     | Proof of applied ability               | What you have built, shipped, experimented with, broken, fixed, or improved—evidence that you can apply knowledge and execute beyond theory.                                 |\n| **Professional Growth & Industry Awareness** | How you operate in the real world      | Understanding teamwork, communication, roles, expectations, career navigation, and how software development works within organizations and the broader industry.             |\n| **Mindset, Values & Professional Identity**  | Who you are becoming                   | Communication, discipline, resilience, ethics, consistency, and long-term thinking—the traits that shape a reliable, trustworthy professional, not just a skilled one.       |\n","x":-638,"y":-1220,"width":1245,"height":380}
+	],
+	"edges":[
+		{"id":"0e6b09565355c406","fromNode":"58e5d0211b260541","fromSide":"right","toNode":"d48fa02b3b7ab8ad","toSide":"left","color":"6"},
+		{"id":"a3584de21bfb691f","fromNode":"924c8f4c85a97aa5","fromSide":"left","toNode":"1b966c052243316e","toSide":"right","color":"2"},
+		{"id":"c4b057616fd20b11","fromNode":"a27382a5fc688650","fromSide":"left","toNode":"e517ab76edc174b3","toSide":"right","color":"1"},
+		{"id":"c075549421485902","fromNode":"bcb3d50beec335eb","fromSide":"right","toNode":"b35608d228769cb0","toSide":"left","color":"5"},
+		{"id":"304120da2703537d","fromNode":"58e5d0211b260541","fromSide":"top","toNode":"fa8c3976633f72a4","toSide":"bottom","color":"6"},
+		{"id":"e7fbaa9f299a9757","fromNode":"bcb3d50beec335eb","fromSide":"bottom","toNode":"127b5b6d02623aa0","toSide":"top","color":"5"},
+		{"id":"9e51afc5e4589bc3","fromNode":"924c8f4c85a97aa5","fromSide":"top","toNode":"fa6aaaddceec4233","toSide":"bottom","color":"2"},
+		{"id":"defb1be635c7195e","fromNode":"a27382a5fc688650","fromSide":"bottom","toNode":"0851d8c084c358ce","toSide":"top","color":"1"}
+	]
+}

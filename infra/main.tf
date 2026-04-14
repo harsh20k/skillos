@@ -13,7 +13,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket = "skillos-terraform-state"
+    bucket = "skillos-terraform-state-965384155969"
     key    = "skillos/terraform.tfstate"
     region = "us-east-1"
   }
@@ -33,8 +33,8 @@ variable "aws_region" {
 }
 
 variable "bedrock_model_id" {
-  description = "Bedrock model ID — swap without code changes"
-  default     = "anthropic.claude-3-haiku-20240307-v1:0"
+  description = "Bedrock model/inference profile ID — swap without code changes"
+  default     = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
 }
 
 variable "github_repo" {
