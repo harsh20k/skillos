@@ -11,6 +11,7 @@ from datetime import date
 from typing import Optional
 
 import boto3
+from botocore.exceptions import ClientError
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 from typing_extensions import TypedDict
@@ -44,8 +45,11 @@ def build_planner_graph(gh: Optional[GitHubClient] = None):
         try:
             resp = s3.get_object(Bucket=_S3_BUCKET, Key=_SKIP_STATE_KEY)
             skip_state: dict = json.loads(resp["Body"].read())
-        except s3.exceptions.NoSuchKey:
-            skip_state = {}
+        except ClientError as exc:
+            if exc.response["Error"]["Code"] in ("NoSuchKey", "NoSuchBucket"):
+                skip_state = {}
+            else:
+                raise
 
         return {"active_skills": active, "skip_state": skip_state}
 
