@@ -39,7 +39,7 @@ SupervisorGraph
 └── TrackerSubgraph    (validate → generate_note → commit)
 ```
 
-LLM calls use **Claude 3.5 Sonnet via Amazon Bedrock** (`langchain-aws` `ChatBedrock`), authenticated via IAM — no API keys in code or environment variables.
+LLM calls use **Amazon Bedrock** (`langchain-aws`: `ChatBedrock` for Anthropic-style models, `ChatBedrockConverse` for Google Gemma and other Converse-supported models), authenticated via IAM — no API keys in code or environment variables. Default model is configurable (`BEDROCK_MODEL_ID` / Terraform `bedrock_model_id`).
 
 **LangSmith** is enabled for all runs to provide tracing, token accounting, and node-level timing without custom logging infrastructure.
 

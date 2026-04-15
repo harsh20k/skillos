@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars (do not commit secrets).
+
+github_repo = "owner/repo"
+
+# Optional overrides:
+# aws_region        = "us-east-1"
+# github_branch     = "main"
+# s3_state_bucket   = "skillos-state"
+# bedrock_model_id  = "google.gemma-3-12b-it"
+# bedrock_model_id  = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
+
+# Cross-account Bedrock (Account A owns Bedrock; this stack is Account B):
+# bedrock_assume_role_arn            = "arn:aws:iam::<ACCOUNT_A_ID>:role/SkillosBedrockFromAccountBRole"
+# bedrock_assume_role_external_id    = "skillos-bedrock-xacct-2026"
+# bedrock_assume_role_session_name   = "skillos-bedrock-session"
+# bedrock_region                     = "us-east-1"

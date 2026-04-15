@@ -33,8 +33,8 @@ This runbook uses AWS CLI named profiles:
 Set reusable shell vars:
 
 ```bash
-export ACCOUNT_A_ID="<account-a-id>"
-export ACCOUNT_B_ID="<account-b-id>"
+export ACCOUNT_A_ID="411960113601"
+export ACCOUNT_B_ID="965384155969"
 export AWS_REGION="us-east-1"
 export BEDROCK_ROLE_NAME="SkillosBedrockFromAccountBRole"
 export LAMBDA_EXEC_ROLE_NAME="skillos-lambda-exec"
@@ -256,6 +256,15 @@ Implementation guidance:
 
 ## Step 5: Deploy Account B stack
 
+Set cross-account variables in `infra/terraform.tfvars` (see `infra/terraform.tfvars.example`):
+
+- `bedrock_assume_role_arn` — IAM role ARN in Account A (Bedrock + trust for `skillos-lambda-exec`)
+- `bedrock_assume_role_external_id` — must match the trust policy `sts:ExternalId` on that role (if you use one)
+- `bedrock_assume_role_session_name` — optional; default `skillos-bedrock-session`
+- `bedrock_region` — optional; sets `BEDROCK_REGION` on Lambdas if Bedrock region should differ from `aws_region`
+
+Terraform applies `sts:AssumeRole` on `skillos-lambda-exec` and merges the `BEDROCK_ASSUME_ROLE_*` env vars into all Lambdas when `bedrock_assume_role_arn` is non-empty.
+
 From repo root:
 
 ```bash
@@ -282,7 +291,29 @@ terraform apply -var-file=terraform.tfvars
 
 ### Quick IAM/STSes test
 
-From a principal in Account B with equivalent Lambda role permissions:
+**Who is calling `AssumeRole` matters.** The role in Account A must trust the **exact principal** you use in the CLI.
+
+- **Production path:** Lambda runs as `arn:aws:iam::<ACCOUNT_B_ID>:role/skillos-lambda-exec`. Your Account A trust policy should list that role ARN (as in Step 1). After `terraform apply`, you do **not** need to manually assume that role to run SkillOS; Lambdas do it in code.
+- **Manual CLI test as an IAM user** (e.g. `arn:aws:iam::965384155969:user/tf_provisioner_janakfoto`): both must be true:
+  1. That user has an IAM policy allowing `sts:AssumeRole` on `arn:aws:iam::<ACCOUNT_A_ID>:role/<BEDROCK_ROLE_NAME>`.
+  2. The **trust policy** on `SkillosBedrockFromAccountBRole` in Account A includes that user ARN in `Principal.AWS` (or a group of principals you use for ops). The trust policy that only allows `skillos-lambda-exec` will **reject** a human IAM user with `AccessDenied`, even if the user has `sts:AssumeRole` in their policy.
+
+Example: add a second statement to the Account A role trust policy for break-glass testing (remove or tighten later):
+
+```json
+{
+  "Effect": "Allow",
+  "Principal": { "AWS": "arn:aws:iam::<ACCOUNT_B_ID>:user/tf_provisioner_janakfoto" },
+  "Action": "sts:AssumeRole",
+  "Condition": {
+    "StringEquals": { "sts:ExternalId": "skillos-bedrock-xacct-2026" }
+  }
+}
+```
+
+Then ensure that user has `sts:AssumeRole` on that role ARN in Account B.
+
+From a principal that is trusted by the role:
 
 ```bash
 aws sts assume-role \
@@ -292,7 +323,7 @@ aws sts assume-role \
   --external-id "${EXTERNAL_ID}"
 ```
 
-If this fails, fix trust policy, role ARN, principal ARN, or external ID mismatch.
+If this fails, fix trust policy, caller IAM policy, role ARN, principal mismatch, or external ID mismatch.
 
 ### Direct Bedrock smoke test via CLI (cross-account)
 
@@ -338,6 +369,17 @@ If this passes, cross-account Bedrock is correctly configured.
 - Confirm CloudWatch logs in Account B show successful Bedrock response.
 - Confirm Bedrock usage/cost appears in Account A.
 
+### IAM inline policy name
+
+`skillos-lambda-exec` uses a **single inline policy**. If `get-role-policy --policy-name lambda_policy` returns `NoSuchEntity`, list names first:
+
+```bash
+aws iam list-role-policies --role-name skillos-lambda-exec
+aws iam get-role-policy --role-name skillos-lambda-exec --policy-name <name-from-list>
+```
+
+After the next `terraform apply`, the inline policy is pinned to the name `lambda_policy` in this repo’s `infra/lambdas.tf`.
+
 ## Troubleshooting
 
 - `AccessDeniedException` on STS assume role:
@@ -348,9 +390,18 @@ If this passes, cross-account Bedrock is correctly configured.
   - Account A role policy missing Bedrock actions/resources.
   - Model access not enabled in Account A for selected model/region.
   - SCP boundary denies Bedrock in Account A.
+- **AWS Marketplace / model subscription** — logs may mention `aws-marketplace:ViewSubscriptions` or `Subscribe`, or “subscription cannot be completed” (common for Anthropic and similar models):
+  - In **Account A** (the account whose credentials call `InvokeModel`), open **Amazon Bedrock → Model access** (or **Bedrock → Marketplace** / model catalog) and **enable or subscribe** to the exact model / inference profile you use (e.g. Claude 3.5 Haiku). Wait a few minutes after accepting terms.
+  - On the **Account A** Bedrock role (`SkillosBedrockFromAccountBRole`), add IAM permission for Marketplace if your org requires it, for example:
+    - `aws-marketplace:ViewSubscriptions`
+    - `aws-marketplace:Subscribe`
+    - (scope `Resource` per your org’s policy; some teams use `"*"` for these actions during setup, then tighten)
+  - Organization **SCPs** or **permission boundaries** can block Marketplace; an admin may need to allow those actions for Account A.
 - Region/model mismatch:
   - `BEDROCK_MODEL_ID` must exist in the Bedrock region used by the client.
   - Set `BEDROCK_REGION` explicitly if infra region differs.
+- **Inference profile IDs vs foundation model IDs:** For many Claude 3.5+ setups, on-demand use expects an **inference profile** ID (e.g. `us.anthropic.claude-3-5-haiku-20241022-v1:0`), not only `anthropic.claude-3-5-haiku-20241022-v1:0`. If Bedrock says on-demand isn’t supported for the model ID, switch to the profile ID from the console/model catalog.
+- **Cross-region routing:** Global inference profiles can route to foundation models in **another region** than your client. IAM on the **Account A** Bedrock role must allow `bedrock:InvokeModel` on `arn:aws:bedrock:*::foundation-model/*` and `arn:aws:bedrock:*:*:inference-profile/*`, not a single-region foundation-model ARN only.
 
 ## Security and operations checklist
 

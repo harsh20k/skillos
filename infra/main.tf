@@ -33,8 +33,32 @@ variable "aws_region" {
 }
 
 variable "bedrock_model_id" {
-  description = "Bedrock model/inference profile ID — swap without code changes"
-  default     = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
+  description = "Bedrock model or inference profile ID — swap without code changes (Gemma uses google.*; Claude 3.5+ often needs us.* inference profile)"
+  default     = "google.gemma-3-12b-it"
+}
+
+variable "bedrock_assume_role_arn" {
+  description = "If non-empty, SkillOS Lambdas call sts:AssumeRole on this ARN (typically Account A) before Bedrock. Leave empty for same-account Bedrock."
+  type        = string
+  default     = ""
+}
+
+variable "bedrock_assume_role_external_id" {
+  description = "ExternalId for AssumeRole; must match the trust condition on bedrock_assume_role_arn. Omit or leave empty if trust policy does not use ExternalId."
+  type        = string
+  default     = ""
+}
+
+variable "bedrock_assume_role_session_name" {
+  description = "Role session name passed to sts:AssumeRole"
+  type        = string
+  default     = "skillos-bedrock-session"
+}
+
+variable "bedrock_region" {
+  description = "If non-empty, sets BEDROCK_REGION on Lambdas (Bedrock API region). When empty, runtime uses AWS_REGION."
+  type        = string
+  default     = ""
 }
 
 variable "github_repo" {

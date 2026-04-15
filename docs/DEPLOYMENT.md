@@ -16,7 +16,7 @@
 
    Terraform injects these into Lambda **env**; values end up in **tfstate** — lock down the state bucket.
 
-3. **Bedrock:** enable model for `var.bedrock_model_id` (default Haiku in `main.tf`) in that region.
+3. **Bedrock:** enable model for `var.bedrock_model_id` (default Gemma 3 12B in `main.tf`) in that region.
 
 4. **Lambda deps:** `lambdas.tf` zips source only. Bundle deps before a working deploy: e.g. `pip install -r requirements.txt -t python/` as a **layer**, or install into a folder included in the zip, or use a **container** image.
 
@@ -48,6 +48,8 @@ Expects `skills/active.json`, `skills/<name>/skill-tree.md`, `progress.md`, `dai
 ## Quick checks
 
 CloudWatch → `skillos-*` log groups. Test Planner Lambda with `{}`. Slack: `/skills`, `/learn …`.
+
+Step-by-step validation (Intake, Tracker, Skip Detector, EventBridge, Slack URL + smoke commands): [STACK_VALIDATION_WALKTHROUGH.md](STACK_VALIDATION_WALKTHROUGH.md).
 
 ## Troubleshooting
 
