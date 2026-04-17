@@ -13,8 +13,11 @@ from __future__ import annotations
 
 import base64
 import json
-from typing import Any, Dict, Iterator, Optional
+from datetime import date, datetime
+from typing import Any, Dict, Iterator, Optional, Sequence
+from uuid import UUID
 
+from langchain_core.messages import BaseMessage, message_to_dict
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import (
     BaseCheckpointSaver,
@@ -24,6 +27,39 @@ from langgraph.checkpoint.base import (
 )
 
 from shared.github_client import GitHubClient
+
+
+def _json_safe(obj: Any) -> Any:
+    """Recursively convert values so json.dumps can persist GitHub checkpoint envelopes.
+
+    LangGraph checkpoint metadata (and nested structures) may contain BaseMessage
+    instances that are not JSON-serializable.
+    """
+    if obj is None or isinstance(obj, (bool, int, float, str)):
+        return obj
+    if isinstance(obj, BaseMessage):
+        return message_to_dict(obj)
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(x) for x in obj]
+    if isinstance(obj, set):
+        return [_json_safe(x) for x in obj]
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    if isinstance(obj, UUID):
+        return str(obj)
+    if hasattr(obj, "model_dump") and callable(obj.model_dump):
+        try:
+            return _json_safe(obj.model_dump())
+        except Exception:
+            pass
+    if hasattr(obj, "dict") and callable(obj.dict):
+        try:
+            return _json_safe(obj.dict())
+        except Exception:
+            pass
+    return str(obj)
 
 
 class GitHubCheckpointer(BaseCheckpointSaver):
@@ -79,12 +115,13 @@ class GitHubCheckpointer(BaseCheckpointSaver):
     ) -> RunnableConfig:
         thread_id: str = config["configurable"].get("thread_id", "default")
         checkpoint_id: str = checkpoint.get("id", "unknown")
+        meta_raw: dict = {} if metadata is None else dict(metadata)
 
         envelope = {
             "thread_id": thread_id,
             "checkpoint_id": checkpoint_id,
             "checkpoint": self._serialize(checkpoint),
-            "metadata": dict(metadata),
+            "metadata": _json_safe(meta_raw),
         }
 
         self._gh.write_file(
@@ -100,6 +137,20 @@ class GitHubCheckpointer(BaseCheckpointSaver):
                 "checkpoint_id": checkpoint_id,
             },
         }
+
+    def put_writes(
+        self,
+        config: RunnableConfig,
+        writes: Sequence[tuple[str, Any]],
+        task_id: str,
+        task_path: str = "",
+    ) -> None:
+        """Persist intermediate task writes.
+
+        This checkpointer stores only the latest checkpoint envelope in GitHub and
+        does not currently materialize pending writes separately.
+        """
+        return None
 
     def list(
         self,

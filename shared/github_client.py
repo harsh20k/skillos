@@ -1,5 +1,6 @@
 """Thin wrapper around PyGithub for SkillOS file operations."""
 import os
+import time
 from datetime import datetime, timezone
 
 from github import Github, GithubException
@@ -35,11 +36,41 @@ class GitHubClient:
             return []
 
     def write_file(self, path: str, content: str, message: str) -> None:
-        sha = self._get_sha(path)
-        if sha:
-            self._repo.update_file(path, message, content, sha, branch=self._branch)
-        else:
-            self._repo.create_file(path, message, content, branch=self._branch)
+        # GitHub contents API is optimistic-concurrency based (sha required on update).
+        # Concurrent Lambda invocations can race between read/create/update calls.
+        max_attempts = 4
+        for attempt in range(max_attempts):
+            try:
+                existing = self._repo.get_contents(path, ref=self._branch)
+                current_content = existing.decoded_content.decode("utf-8")
+                if current_content == content:
+                    return
+                self._repo.update_file(
+                    path,
+                    message,
+                    content,
+                    existing.sha,
+                    branch=self._branch,
+                )
+                return
+            except GithubException as exc:
+                status = getattr(exc, "status", None)
+                if status == 404:
+                    try:
+                        self._repo.create_file(path, message, content, branch=self._branch)
+                        return
+                    except GithubException as create_exc:
+                        create_status = getattr(create_exc, "status", None)
+                        if create_status not in (409, 422):
+                            raise
+                elif status not in (409, 422):
+                    raise
+
+            # Brief backoff before retrying after optimistic-lock conflicts.
+            if attempt < max_attempts - 1:
+                time.sleep(0.2 * (attempt + 1))
+                continue
+            raise
 
     def commit_exists_today(self, skill: str) -> bool:
         """Return True if a progress commit exists for skill today (UTC)."""

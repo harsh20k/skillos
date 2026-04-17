@@ -6,12 +6,11 @@ Commands:
   /skip <skill>       → Mark skill skipped for today
   /harder <skill>     → Increase difficulty in active.json
   /easier <skill>     → Decrease difficulty in active.json
-  /skills             → List active skills and today's task count
+  /skills, /skill     → List active skills and today's task count (alias)
 """
 import json
 import os
 
-import boto3
 from slack_bolt import App
 from slack_bolt.adapter.aws_lambda import SlackRequestHandler
 
@@ -21,12 +20,22 @@ app = App(
     process_before_response=True,
 )
 
-_lambda_client = boto3.client("lambda")
+_lambda_client = None
 _DIFFICULTY_LEVELS = ["beginner", "intermediate", "advanced"]
 
 
+def _lambda_client_get():
+    """Lazy init: keeps import of botocore off the critical path when unused."""
+    global _lambda_client
+    if _lambda_client is None:
+        import boto3
+
+        _lambda_client = boto3.client("lambda")
+    return _lambda_client
+
+
 def _invoke(fn_name: str, payload: dict) -> dict:
-    resp = _lambda_client.invoke(
+    resp = _lambda_client_get().invoke(
         FunctionName=fn_name,
         InvocationType="RequestResponse",
         Payload=json.dumps(payload).encode(),
@@ -37,39 +46,64 @@ def _invoke(fn_name: str, payload: dict) -> dict:
 # ---------------------------------------------------------------------------
 # /learn
 # ---------------------------------------------------------------------------
+# Slash commands must be acknowledged within ~3s. Intake invokes Bedrock + GitHub
+# and often exceeds that; use lazy listeners so API Gateway returns immediately.
 
-@app.command("/learn")
-def handle_learn(ack, command, say):
-    ack()
+
+def _learn_ack(ack):
+    # Slack needs an HTTP response quickly; Bolt then self-invokes for the lazy step.
+    ack(
+        text="Got it — drafting a reply (this can take ~10–20s)…",
+        response_type="ephemeral",
+    )
+
+
+def _learn_lazy(command, say):
     text = command.get("text", "").strip()
     if not text:
         say("Usage: `/learn <your learning goal>`")
         return
 
-    result = _invoke(
-        os.environ["INTAKE_LAMBDA_NAME"],
-        {"user_id": command["user_id"], "message": text},
-    )
-    say(result.get("reply", "Something went wrong. Please try again."))
+    try:
+        result = _invoke(
+            os.environ["INTAKE_LAMBDA_NAME"],
+            {"user_id": command["user_id"], "message": text},
+        )
+        say(result.get("reply", "Something went wrong. Please try again."))
+    except Exception as exc:
+        say(f"Something went wrong calling intake: `{exc}`")
+
+
+app.command("/learn")(ack=_learn_ack, lazy=[_learn_lazy])
 
 
 # ---------------------------------------------------------------------------
 # /done
 # ---------------------------------------------------------------------------
 
-@app.command("/done")
-def handle_done(ack, command, say):
-    ack()
+
+def _done_ack(ack):
+    ack(
+        text="Logging progress…",
+        response_type="ephemeral",
+    )
+
+
+def _done_lazy(command, say):
     parts = command.get("text", "").strip().split(maxsplit=1)
     if not parts:
         say("Usage: `/done <skill> [optional note]`")
         return
 
     skill, context = parts[0], parts[1] if len(parts) > 1 else ""
-    result = _invoke(
-        os.environ["TRACKER_LAMBDA_NAME"],
-        {"skill": skill, "user_id": command["user_id"], "context": context},
-    )
+    try:
+        result = _invoke(
+            os.environ["TRACKER_LAMBDA_NAME"],
+            {"skill": skill, "user_id": command["user_id"], "context": context},
+        )
+    except Exception as exc:
+        say(f"Something went wrong calling tracker: `{exc}`")
+        return
 
     if result.get("status") == "error":
         say(f"Error: {result['message']}")
@@ -81,6 +115,9 @@ def handle_done(ack, command, say):
     if unlocked:
         msg += f"\n:unlock: Newly unlocked: {', '.join(f'`{n}`' for n in unlocked)}"
     say(msg)
+
+
+app.command("/done")(ack=_done_ack, lazy=[_done_lazy])
 
 
 # ---------------------------------------------------------------------------
@@ -172,9 +209,10 @@ def _adjust_difficulty(command, say, delta: int) -> None:
 
 
 # ---------------------------------------------------------------------------
-# /skills
+# /skills (Slack apps may register /skill — same handler)
 # ---------------------------------------------------------------------------
 
+@app.command("/skill")
 @app.command("/skills")
 def handle_skills(ack, command, say):
     ack()

@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SkillOS Flowchart</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0f1117;
+    color: #e2e8f0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    padding: 32px 16px;
+    min-height: 100vh;
+  }
+  h1 {
+    text-align: center;
+    font-size: 0.8rem;
+    color: #475569;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 32px;
+  }
+
+  .canvas {
+    position: relative;
+    width: 960px;
+    margin: 0 auto;
+  }
+
+  svg.arrows {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: visible;
+  }
+
+  /* ── Node base ── */
+  .node {
+    position: absolute;
+    border-radius: 8px;
+    border: 1.5px solid;
+    padding: 8px 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-align: center;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+  .node small { font-weight: 400; font-size: 0.62rem; display: block; opacity: 0.75; }
+
+  /* colours */
+  .c-user    { background:#1e3a5f; border-color:#3b82f6; color:#93c5fd; }
+  .c-slack   { background:#2d1b4e; border-color:#a855f7; color:#d8b4fe; }
+  .c-lambda  { background:#1a2e1a; border-color:#22c55e; color:#86efac; }
+  .c-lg      { background:#2a1a1a; border-color:#ef4444; color:#fca5a5; }
+  .c-bedrock { background:#1a2530; border-color:#14b8a6; color:#5eead4; }
+  .c-github  { background:#1a1a2e; border-color:#6366f1; color:#a5b4fc; }
+  .c-s3      { background:#2d1f0e; border-color:#f97316; color:#fdba74; }
+  .c-eb      { background:#1a2535; border-color:#0ea5e9; color:#7dd3fc; }
+  .c-super   { background:#1a1a1a; border-color:#475569; color:#64748b; }
+
+  /* subgraph boxes */
+  .group {
+    position: absolute;
+    border: 1px dashed;
+    border-radius: 12px;
+    padding: 28px 12px 12px;
+  }
+  .group-label {
+    position: absolute;
+    top: 8px; left: 12px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .g-slack  { border-color:#4c1d95; }
+  .g-slack  .group-label { color:#7c3aed; }
+  .g-lambda { border-color:#14532d; }
+  .g-lambda .group-label { color:#166534; }
+  .g-intake { border-color:#7f1d1d; }
+  .g-intake .group-label { color:#991b1b; }
+  .g-shared { border-color:#1e1b4b; }
+  .g-shared .group-label { color:#3730a3; }
+  .g-sched  { border-color:#0c4a6e; }
+  .g-sched  .group-label { color:#075985; }
+
+  /* legend */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 12px; justify-content: center;
+    margin-top: 24px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.65rem; color: #64748b; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; }
+</style>
+</head>
+<body>
+<h1>SkillOS — System Flowchart</h1>
+
+<div class="canvas" id="canvas" style="height:1000px;">
+
+  <!-- ── Groups ── -->
+  <div class="group g-slack"  style="left:320px;top:100px;width:300px;height:260px;">
+    <span class="group-label">Slack — bot.py</span>
+  </div>
+  <div class="group g-lambda" style="left:160px;top:440px;width:300px;height:180px;">
+    <span class="group-label">AWS Lambdas (stateless)</span>
+  </div>
+  <div class="group g-intake" style="left:530px;top:440px;width:240px;height:180px;">
+    <span class="group-label">Inside Intake</span>
+  </div>
+  <div class="group g-shared" style="left:200px;top:720px;width:340px;height:160px;">
+    <span class="group-label">Shared State</span>
+  </div>
+  <div class="group g-sched"  style="left:640px;top:720px;width:240px;height:160px;">
+    <span class="group-label">Scheduled Triggers</span>
+  </div>
+
+  <!-- ── Nodes ── -->
+  <!-- User -->
+  <div class="node c-user"    id="USER"       style="left:420px;top:20px;width:120px;">👤 User</div>
+
+  <!-- Slack commands -->
+  <div class="node c-slack"   id="SL_LEARN"   style="left:330px;top:130px;width:110px;">/learn</div>
+  <div class="node c-slack"   id="SL_DONE"    style="left:450px;top:130px;width:110px;">/done</div>
+  <div class="node c-slack"   id="SL_SKIP"    style="left:330px;top:210px;width:110px;">/skip</div>
+  <div class="node c-slack"   id="SL_DIFF"    style="left:450px;top:210px;width:110px;">/harder /easier</div>
+  <div class="node c-slack"   id="SL_SKILLS"  style="left:390px;top:290px;width:110px;">/skills</div>
+
+  <!-- Lambdas -->
+  <div class="node c-lambda"  id="INTAKE"     style="left:170px;top:470px;width:130px;">📥 Intake Lambda</div>
+  <div class="node c-lambda"  id="TRACKER"    style="left:310px;top:470px;width:130px;">✅ Tracker Lambda</div>
+  <div class="node c-lambda"  id="PLANNER"    style="left:170px;top:555px;width:130px;">📅 Planner Lambda</div>
+  <div class="node c-lambda"  id="SKIPDET"    style="left:310px;top:555px;width:130px;">🌙 Skip Detector</div>
+
+  <!-- LangGraph / Bedrock -->
+  <div class="node c-lg"      id="LG"         style="left:540px;top:470px;width:130px;">🔀 LangGraph<small>thread: intake-{user_id}</small></div>
+  <div class="node c-bedrock" id="BEDROCK"    style="left:540px;top:555px;width:130px;">🤖 Bedrock LLM</div>
+
+  <!-- Shared state -->
+  <div class="node c-github"  id="GITHUB"     style="left:210px;top:760px;width:140px;">📁 GitHub Repo<small>skill trees · plan · notes<br>checkpointer</small></div>
+  <div class="node c-s3"      id="S3"         style="left:370px;top:760px;width:140px;">🗄️ S3 Bucket<small>skip_state.json<br>difficulty state</small></div>
+
+  <!-- EventBridge -->
+  <div class="node c-eb"      id="EB_MORN"    style="left:650px;top:750px;width:130px;">⏰ EventBridge<small>Morning → Planner</small></div>
+  <div class="node c-eb"      id="EB_EVE"     style="left:650px;top:830px;width:130px;">⏰ EventBridge<small>Evening → Skip Det.</small></div>
+
+  <!-- Supervisor -->
+  <div class="node c-super"   id="SUPER"      style="left:40px;top:500px;width:110px;">🗺️ supervisor<br>/graph.py<small>local / dev only</small></div>
+
+  <!-- ── SVG arrows ── -->
+  <svg class="arrows" id="svg">
+    <defs>
+      <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#475569"/>
+      </marker>
+      <marker id="arr-blue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#3b82f6"/>
+      </marker>
+      <marker id="arr-green" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#22c55e"/>
+      </marker>
+      <marker id="arr-purple" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#a855f7"/>
+      </marker>
+      <marker id="arr-red" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#ef4444"/>
+      </marker>
+      <marker id="arr-orange" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#f97316"/>
+      </marker>
+      <marker id="arr-indigo" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#6366f1"/>
+      </marker>
+      <marker id="arr-sky" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#0ea5e9"/>
+      </marker>
+      <marker id="arr-grey" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#475569"/>
+      </marker>
+      <!-- reverse for bidirectional -->
+      <marker id="arr-rev-red" markerWidth="8" markerHeight="8" refX="2" refY="3" orient="auto">
+        <path d="M8,0 L8,6 L0,3 z" fill="#ef4444"/>
+      </marker>
+    </defs>
+  </svg>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-item"><div class="swatch" style="background:#3b82f6"></div>User</div>
+  <div class="legend-item"><div class="swatch" style="background:#a855f7"></div>Slack</div>
+  <div class="legend-item"><div class="swatch" style="background:#22c55e"></div>Lambda</div>
+  <div class="legend-item"><div class="swatch" style="background:#ef4444"></div>LangGraph</div>
+  <div class="legend-item"><div class="swatch" style="background:#14b8a6"></div>Bedrock</div>
+  <div class="legend-item"><div class="swatch" style="background:#6366f1"></div>GitHub</div>
+  <div class="legend-item"><div class="swatch" style="background:#f97316"></div>S3</div>
+  <div class="legend-item"><div class="swatch" style="background:#0ea5e9"></div>EventBridge</div>
+  <div class="legend-item"><div class="swatch" style="background:#475569"></div>Supervisor (local)</div>
+</div>
+
+<script>
+// Helper: get center of a node
+function cx(id) {
+  const el = document.getElementById(id);
+  const r = el.getBoundingClientRect();
+  const cr = document.getElementById('canvas').getBoundingClientRect();
+  return { x: r.left - cr.left + r.width / 2, y: r.top - cr.top + r.height / 2,
+           t: r.top - cr.top, b: r.top - cr.top + r.height,
+           l: r.left - cr.left, r: r.left - cr.left + r.width };
+}
+
+function line(svg, x1, y1, x2, y2, color, marker, dash, label) {
+  const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  l.setAttribute('x1', x1); l.setAttribute('y1', y1);
+  l.setAttribute('x2', x2); l.setAttribute('y2', y2);
+  l.setAttribute('stroke', color);
+  l.setAttribute('stroke-width', '1.5');
+  if (dash) l.setAttribute('stroke-dasharray', '5,4');
+  l.setAttribute('marker-end', `url(#${marker})`);
+  svg.appendChild(l);
+  if (label) {
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.setAttribute('x', (x1+x2)/2 + 4);
+    t.setAttribute('y', (y1+y2)/2 - 4);
+    t.setAttribute('fill', '#64748b');
+    t.setAttribute('font-size', '9');
+    t.setAttribute('font-family', 'system-ui');
+    t.textContent = label;
+    svg.appendChild(t);
+  }
+}
+
+function path(svg, d, color, marker, dash) {
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  p.setAttribute('d', d);
+  p.setAttribute('fill', 'none');
+  p.setAttribute('stroke', color);
+  p.setAttribute('stroke-width', '1.5');
+  if (dash) p.setAttribute('stroke-dasharray', '5,4');
+  if (marker) p.setAttribute('marker-end', `url(#${marker})`);
+  svg.appendChild(p);
+}
+
+window.addEventListener('load', () => {
+  const svg = document.getElementById('svg');
+  const n = {};
+  ['USER','SL_LEARN','SL_DONE','SL_SKIP','SL_DIFF','SL_SKILLS',
+   'INTAKE','TRACKER','PLANNER','SKIPDET','LG','BEDROCK',
+   'GITHUB','S3','EB_MORN','EB_EVE','SUPER'].forEach(id => n[id] = cx(id));
+
+  // User → /learn
+  line(svg, n.USER.x-20, n.USER.b, n.SL_LEARN.x+20, n.SL_LEARN.t, '#a855f7', 'arr-purple', false);
+  // User → /done
+  line(svg, n.USER.x+20, n.USER.b, n.SL_DONE.x-10, n.SL_DONE.t, '#a855f7', 'arr-purple', false);
+  // User → /skip
+  path(svg, `M${n.USER.x-30},${n.USER.b} C${n.USER.x-30},${n.SL_SKIP.y} ${n.SL_SKIP.x+20},${n.SL_SKIP.y} ${n.SL_SKIP.r},${n.SL_SKIP.y}`, '#a855f7', 'arr-purple', false);
+  // User → /harder/easier
+  path(svg, `M${n.USER.x+30},${n.USER.b} C${n.USER.x+30},${n.SL_DIFF.y} ${n.SL_DIFF.x},${n.SL_DIFF.y} ${n.SL_DIFF.x},${n.SL_DIFF.t}`, '#a855f7', 'arr-purple', false);
+  // User → /skills
+  line(svg, n.USER.x, n.USER.b, n.SL_SKILLS.x, n.SL_SKILLS.t, '#a855f7', 'arr-purple', false);
+
+  // /learn → Intake Lambda
+  line(svg, n.SL_LEARN.x, n.SL_LEARN.b, n.INTAKE.x, n.INTAKE.t, '#22c55e', 'arr-green', false, 'sync invoke');
+  // /done → Tracker Lambda
+  line(svg, n.SL_DONE.x, n.SL_DONE.b, n.TRACKER.x, n.TRACKER.t, '#22c55e', 'arr-green', false, 'sync invoke');
+  // /skip → S3
+  path(svg, `M${n.SL_SKIP.x},${n.SL_SKIP.b} C${n.SL_SKIP.x},${n.S3.t-60} ${n.S3.x},${n.S3.t-60} ${n.S3.x},${n.S3.t}`, '#f97316', 'arr-orange', false, 'directly');
+  // /harder → S3
+  path(svg, `M${n.SL_DIFF.r+10},${n.SL_DIFF.y} C${n.SL_DIFF.r+60},${n.SL_DIFF.y} ${n.S3.r+60},${n.S3.y} ${n.S3.r},${n.S3.y}`, '#f97316', 'arr-orange', false);
+  // /skills → GitHub
+  path(svg, `M${n.SL_SKILLS.x},${n.SL_SKILLS.b} C${n.SL_SKILLS.x},${n.GITHUB.t-40} ${n.GITHUB.x},${n.GITHUB.t-40} ${n.GITHUB.x},${n.GITHUB.t}`, '#6366f1', 'arr-indigo', false, 'directly');
+
+  // Intake → LangGraph
+  line(svg, n.INTAKE.r, n.INTAKE.y, n.LG.l, n.LG.y, '#ef4444', 'arr-red', false);
+  // LangGraph ↔ Bedrock (bidirectional)
+  line(svg, n.LG.x+10, n.LG.b, n.BEDROCK.x+10, n.BEDROCK.t, '#14b8a6', 'arr', false);
+  line(svg, n.LG.x-10, n.LG.b, n.BEDROCK.x-10, n.BEDROCK.t, '#ef4444', 'arr-red', false);
+  // LangGraph → GitHub (checkpointer)
+  path(svg, `M${n.LG.x},${n.LG.b} C${n.LG.x},${n.GITHUB.t-30} ${n.GITHUB.r+10},${n.GITHUB.t-30} ${n.GITHUB.r},${n.GITHUB.y}`, '#6366f1', 'arr-indigo', true, 'checkpointer');
+
+  // Intake → GitHub (reads notes)
+  line(svg, n.INTAKE.x, n.INTAKE.b, n.GITHUB.x+20, n.GITHUB.t, '#6366f1', 'arr-indigo', false, 'reads notes');
+  // Tracker → GitHub (writes progress)
+  path(svg, `M${n.TRACKER.x},${n.TRACKER.b} C${n.TRACKER.x},${n.GITHUB.t-20} ${n.GITHUB.x+40},${n.GITHUB.t-20} ${n.GITHUB.x+50},${n.GITHUB.t}`, '#6366f1', 'arr-indigo', false, 'writes progress');
+  // Planner → GitHub
+  path(svg, `M${n.PLANNER.l},${n.PLANNER.y} C${n.PLANNER.l-40},${n.PLANNER.y} ${n.PLANNER.l-40},${n.GITHUB.y} ${n.GITHUB.l},${n.GITHUB.y}`, '#6366f1', 'arr-indigo', false, 'reads/writes plan');
+  // Planner → S3
+  path(svg, `M${n.PLANNER.x},${n.PLANNER.b} C${n.PLANNER.x},${n.S3.t-40} ${n.S3.x},${n.S3.t-40} ${n.S3.x},${n.S3.t}`, '#f97316', 'arr-orange', false, 'reads skip state');
+  // SkipDet → S3
+  line(svg, n.SKIPDET.x, n.SKIPDET.b, n.S3.x-20, n.S3.t, '#f97316', 'arr-orange', false, 'writes');
+
+  // Intake → User (reply)
+  path(svg, `M${n.INTAKE.l},${n.INTAKE.y} C${n.INTAKE.l-80},${n.INTAKE.y} ${n.INTAKE.l-80},${n.USER.y} ${n.USER.l},${n.USER.y}`, '#3b82f6', 'arr-blue', true, 'reply in-channel');
+  // Tracker → User (reply)
+  path(svg, `M${n.TRACKER.r},${n.TRACKER.y} C${n.TRACKER.r+20},${n.TRACKER.y} ${n.USER.r+20},${n.USER.y} ${n.USER.r},${n.USER.y}`, '#3b82f6', 'arr-blue', true, 'reply');
+
+  // EventBridge → Planner
+  path(svg, `M${n.EB_MORN.l},${n.EB_MORN.y} C${n.PLANNER.r+20},${n.EB_MORN.y} ${n.PLANNER.r+20},${n.PLANNER.y} ${n.PLANNER.r},${n.PLANNER.y}`, '#0ea5e9', 'arr-sky', false, 'morning');
+  // EventBridge → SkipDet
+  path(svg, `M${n.EB_EVE.l},${n.EB_EVE.y} C${n.SKIPDET.r+20},${n.EB_EVE.y} ${n.SKIPDET.r+20},${n.SKIPDET.y} ${n.SKIPDET.r},${n.SKIPDET.y}`, '#0ea5e9', 'arr-sky', false, 'evening');
+
+  // Supervisor → Lambdas (dashed)
+  line(svg, n.SUPER.r, n.SUPER.y-10, n.INTAKE.l, n.INTAKE.y-5, '#475569', 'arr-grey', true, 'local only');
+  line(svg, n.SUPER.r, n.SUPER.y+5, n.PLANNER.l, n.PLANNER.y, '#475569', 'arr-grey', true);
+  line(svg, n.SUPER.x, n.SUPER.b, n.SKIPDET.l-5, n.SKIPDET.y+5, '#475569', 'arr-grey', true);
+  line(svg, n.SUPER.r, n.SUPER.y, n.TRACKER.l-5, n.TRACKER.y+5, '#475569', 'arr-grey', true);
+});
+</script>
+</body>
+</html>

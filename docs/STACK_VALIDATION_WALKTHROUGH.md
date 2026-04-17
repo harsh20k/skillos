@@ -4,7 +4,7 @@ Use this after a successful `terraform apply` and Bedrock smoke test (e.g. `skil
 
 **Prerequisites**
 
-- [`docs/DEPLOYMENT.md`](DEPLOYMENT.md) completed: secrets, `github_repo`, layer/zip built, Lambdas deployed.
+- `[docs/DEPLOYMENT.md](DEPLOYMENT.md)` completed: secrets, `github_repo`, layer/zip built, Lambdas deployed.
 - GitHub repo has `skills/active.json`, `skills/<skill-id>/skill-tree.md`, and at least one skill id you can use in examples (below uses `portrait-sketching` — replace with a real id from your repo).
 
 ---
@@ -55,12 +55,14 @@ aws lambda invoke \
 
 ### 1.4 `skillos-skip-detector` and EventBridge
 
-**Scheduled runs** (see [`infra/eventbridge.tf`](../infra/eventbridge.tf)):
+**Scheduled runs** (see `[infra/eventbridge.tf](../infra/eventbridge.tf)`):
 
-| Rule | Schedule (UTC) | Target |
-|------|----------------|--------|
-| `skillos-planner-08-00` | `08:00` daily | `skillos-planner` |
-| `skillos-skip-detector-23-00` | `23:00` daily | `skillos-skip-detector` |
+
+| Rule                          | Schedule (UTC) | Target                  |
+| ----------------------------- | -------------- | ----------------------- |
+| `skillos-planner-08-00`       | `08:00` daily  | `skillos-planner`       |
+| `skillos-skip-detector-23-00` | `23:00` daily  | `skillos-skip-detector` |
+
 
 **Manual invoke** (skip detector accepts any payload; often `{}`):
 
@@ -90,22 +92,24 @@ aws events list-rules --name-prefix skillos-
 
 1. Open [api.slack.com](https://api.slack.com/apps) → your SkillOS app.
 2. **Slash Commands** → for **each** command (`/learn`, `/done`, `/skip`, `/harder`, `/easier`, `/skills`), set **Request URL** to the Terraform output **exactly**:
-   - `https://...amazonaws.com/slack/events`  
-   (same URL for every command; path must be `/slack/events`, method POST — see [`infra/api_gateway.tf`](../infra/api_gateway.tf).)
+  - `https://...amazonaws.com/slack/events`  
+   (same URL for every command; path must be `/slack/events`, method POST — see `[infra/api_gateway.tf](../infra/api_gateway.tf)`.)
 3. **OAuth & Permissions** → install the app to your workspace if needed.
-4. Secrets **`skillos/slack-bot-token`** and **`skillos/slack-signing-secret`** must match the app. After changing secrets, run `terraform apply` again so `skillos-slack-bot` picks up env vars (or update Lambda env manually).
+4. Secrets `**skillos/slack-bot-token`** and `**skillos/slack-signing-secret`** must match the app. After changing secrets, run `terraform apply` again so `skillos-slack-bot` picks up env vars (or update Lambda env manually).
 
 ### 2.2 Smoke tests
 
-Run in Slack (see [`slack/bot.py`](../slack/bot.py)):
+Run in Slack (see `[slack/bot.py](../slack/bot.py)`):
 
-| Command | What it exercises |
-|---------|-------------------|
-| `/skills` | Reads `active.json` + state; no Bedrock required for listing |
-| `/learn …` | → `skillos-intake` (Bedrock + GitHub checkpointer) |
-| `/done …` | → `skillos-tracker` (Bedrock + GitHub writes) |
-| `/skip …` | S3 `skip_state.json` via slack-bot role |
-| `/harder`, `/easier` | GitHub writes to `active.json` |
+
+| Command              | What it exercises                                            |
+| -------------------- | ------------------------------------------------------------ |
+| `/skills`            | Reads `active.json` + state; no Bedrock required for listing |
+| `/learn …`           | → `skillos-intake` (Bedrock + GitHub checkpointer)           |
+| `/done …`            | → `skillos-tracker` (Bedrock + GitHub writes)                |
+| `/skip …`            | S3 `skip_state.json` via slack-bot role                      |
+| `/harder`, `/easier` | GitHub writes to `active.json`                               |
+
 
 Suggested order:
 
@@ -115,12 +119,14 @@ Suggested order:
 
 ### 2.3 If Slack fails
 
-| Symptom | Likely cause |
-|---------|----------------|
-| `invalid_signature` / 401 | Wrong signing secret or Request URL mismatch (trailing slash, wrong stage). |
-| 403 / timeout from API Gateway | Wrong route; must be `POST /slack/events`. |
-| Bot silent but API 200 | Check `/aws/lambda/skillos-slack-bot` logs; downstream Lambda errors. |
-| Intake/Tracker errors | Same as §1 — CloudWatch on `skillos-intake` / `skillos-tracker`. |
+
+| Symptom                        | Likely cause                                                                |
+| ------------------------------ | --------------------------------------------------------------------------- |
+| `invalid_signature` / 401      | Wrong signing secret or Request URL mismatch (trailing slash, wrong stage). |
+| 403 / timeout from API Gateway | Wrong route; must be `POST /slack/events`.                                  |
+| Bot silent but API 200         | Check `/aws/lambda/skillos-slack-bot` logs; downstream Lambda errors.       |
+| Intake/Tracker errors          | Same as §1 — CloudWatch on `skillos-intake` / `skillos-tracker`.            |
+
 
 More: [DEPLOYMENT.md](DEPLOYMENT.md) troubleshooting table.
 

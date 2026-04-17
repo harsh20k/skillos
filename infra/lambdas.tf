@@ -33,8 +33,18 @@ data "archive_file" "skillos" {
   source_dir  = "${path.module}/.."
   output_path = "${path.module}/skillos.zip"
   excludes = [
-    ".git", ".venv", "__pycache__", "*.pyc",
-    "infra", "docs", "tests", ".cursor",
+    ".git/**",
+    ".venv/**",
+    ".pytest_cache/**",
+    ".cursor/**",
+    "infra/**",
+    "docs/**",
+    "tests/**",
+    "notes/**",
+    "seed-second-brain-vault-agentic/**",
+    "**/__pycache__/**",
+    "**/*.pyc",
+    "**/.DS_Store",
   ]
 }
 
@@ -211,10 +221,13 @@ resource "aws_lambda_function" "slack_bot" {
   filename         = data.archive_file.skillos.output_path
   source_code_hash = data.archive_file.skillos.output_base64sha256
   layers           = local.lambda_layers
-  handler          = "slack.bot.lambda_handler"
+  handler          = "skillos_slack.bot.lambda_handler"
   runtime          = "python3.12"
   role             = aws_iam_role.lambda_exec.arn
-  timeout          = 30
+  # Slash commands must ack within ~3s. Extra memory speeds cold start (more CPU);
+  # lazy listener still loads boto3 + self-invokes before the first HTTP response returns.
+  memory_size      = 1024
+  timeout          = 60
 
   environment {
     variables = merge(local.common_env, {
