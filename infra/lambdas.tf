@@ -142,13 +142,18 @@ locals {
   )
 
   common_env = merge({
-    GITHUB_REPO          = var.github_repo
-    GITHUB_BRANCH        = var.github_branch
-    S3_BUCKET            = var.s3_state_bucket
-    BEDROCK_MODEL_ID     = var.bedrock_model_id
-    LANGCHAIN_TRACING_V2 = "true"
-    LANGCHAIN_API_KEY    = data.aws_secretsmanager_secret_version.langsmith_api_key.secret_string
-    GITHUB_TOKEN         = data.aws_secretsmanager_secret_version.github_token.secret_string
+    GITHUB_REPO           = var.github_repo
+    GITHUB_BRANCH         = var.github_branch
+    S3_BUCKET             = var.s3_state_bucket
+    BEDROCK_MODEL_ID      = var.bedrock_model_id
+    LANGCHAIN_TRACING_V2  = "true"
+    LANGCHAIN_API_KEY     = data.aws_secretsmanager_secret_version.langsmith_api_key.secret_string
+    GITHUB_TOKEN          = data.aws_secretsmanager_secret_version.github_token.secret_string
+    RAG_CHUNK_SIZE        = var.rag_chunk_size
+    RAG_CHUNK_OVERLAP     = var.rag_chunk_overlap
+    RAG_TOP_K             = var.rag_top_k
+    RAG_EMBEDDING_MODEL   = var.rag_embedding_model
+    PROMPT_VERSION        = var.prompt_version
   }, local.bedrock_cross_account_env)
 }
 
@@ -216,6 +221,23 @@ resource "aws_lambda_function" "tracker" {
   }
 }
 
+resource "aws_lambda_function" "rag_indexer" {
+  function_name    = "skillos-rag-indexer"
+  filename         = data.archive_file.skillos.output_path
+  source_code_hash = data.archive_file.skillos.output_base64sha256
+  layers           = local.lambda_layers
+  handler          = "agents.rag_indexer.handler.lambda_handler"
+  runtime          = "python3.12"
+  role             = aws_iam_role.lambda_exec.arn
+  # FAISS index build can be slow for large vaults; 512 MB for numpy/FAISS ops
+  memory_size      = 512
+  timeout          = 300
+
+  environment {
+    variables = local.common_env
+  }
+}
+
 resource "aws_lambda_function" "slack_bot" {
   function_name    = "skillos-slack-bot"
   filename         = data.archive_file.skillos.output_path
@@ -235,6 +257,7 @@ resource "aws_lambda_function" "slack_bot" {
       SLACK_SIGNING_SECRET = data.aws_secretsmanager_secret_version.slack_signing_secret.secret_string
       INTAKE_LAMBDA_NAME   = aws_lambda_function.intake.function_name
       TRACKER_LAMBDA_NAME  = aws_lambda_function.tracker.function_name
+      PLANNER_LAMBDA_NAME  = aws_lambda_function.planner.function_name
     })
   }
 }
@@ -248,3 +271,4 @@ output "planner_lambda_name" { value = aws_lambda_function.planner.function_name
 output "skip_detector_lambda_name" { value = aws_lambda_function.skip_detector.function_name }
 output "tracker_lambda_name" { value = aws_lambda_function.tracker.function_name }
 output "slack_bot_lambda_name" { value = aws_lambda_function.slack_bot.function_name }
+output "rag_indexer_lambda_name" { value = aws_lambda_function.rag_indexer.function_name }

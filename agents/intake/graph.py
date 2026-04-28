@@ -5,6 +5,9 @@ Flow (per Lambda invocation — human-in-the-loop via checkpointer):
 
 The graph pauses at END after each clarify turn; the checkpointer persists
 state so the next Slack message resumes the conversation.
+
+Multi-turn routing uses structured output (ClarifyResponse) so routing is
+based on a parsed boolean rather than fragile string matching.
 """
 from __future__ import annotations
 
@@ -17,8 +20,8 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
-from agents.intake.github_reader import fetch_notes_summary
-from agents.intake.prompt import INTAKE_SYSTEM_PROMPT, READY_SIGNAL
+from agents.intake.github_reader import fetch_notes_for_query, fetch_notes_summary
+from agents.intake.prompt import ClarifyResponse, get_prompt as get_intake_prompt
 from shared.github_client import GitHubClient
 from shared.llm import get_llm
 
@@ -34,46 +37,84 @@ class IntakeState(TypedDict):
 
 def build_intake_graph(gh: Optional[GitHubClient] = None, checkpointer=None):
     llm = get_llm()
+    structured_llm = llm.with_structured_output(ClarifyResponse)
     _gh = gh or GitHubClient()
 
     def read_notes(state: IntakeState) -> dict:
         if state.get("notes_summary"):
             return {}
-        summary = fetch_notes_summary(_gh)
+        # Try to extract the user's goal from the first human message for RAG retrieval
+        first_human = next(
+            (m for m in state.get("messages", []) if isinstance(m, HumanMessage)),
+            None,
+        )
+        query = getattr(first_human, "content", "") if first_human else ""
+
+        if query:
+            summary = fetch_notes_for_query(_gh, query)
+        else:
+            summary = fetch_notes_summary(_gh)
+
         return {"notes_summary": summary, "clarification_turns": 0, "done": False}
 
     def clarify(state: IntakeState) -> dict:
         context = state.get("notes_summary", "")
         suffix = f"\n\nUser's existing notes for context:\n{context}" if context else ""
-        msgs: list[BaseMessage] = [SystemMessage(content=INTAKE_SYSTEM_PROMPT + suffix)]
+
+        turns = state.get("clarification_turns", 0)
+        soft_cap_nudge = ""
+        if turns >= 5:
+            soft_cap_nudge = (
+                "\n\nYou have asked several clarifying questions. "
+                "You MUST set ready=true and produce the skill tree in this response."
+            )
+
+        msgs: list[BaseMessage] = [
+            SystemMessage(content=get_intake_prompt() + suffix + soft_cap_nudge)
+        ]
         msgs += state["messages"]
-        response = llm.invoke(msgs)
-        turns = state.get("clarification_turns", 0) + 1
-        return {"messages": [response], "clarification_turns": turns}
+
+        response: ClarifyResponse = structured_llm.invoke(msgs)
+
+        # Store the structured response as an AI message so message history stays clean
+        from langchain_core.messages import AIMessage
+        ai_msg = AIMessage(content=response.reply)
+
+        return {
+            "messages": [ai_msg],
+            "clarification_turns": turns + 1,
+            "_clarify_response": response,
+        }
 
     def route_after_clarify(state: IntakeState) -> str:
-        last = state["messages"][-1]
-        content: str = getattr(last, "content", "")
-        if READY_SIGNAL in content or state.get("clarification_turns", 0) >= 3:
+        # The structured response is stored transiently in state; fall back gracefully
+        resp: Optional[ClarifyResponse] = state.get("_clarify_response")
+        if resp is not None and resp.ready:
             return "scaffold"
-        return "wait"  # pause; resume on next human message
+        # Soft cap: force scaffold after 6 turns regardless
+        if state.get("clarification_turns", 0) >= 6:
+            return "scaffold"
+        return "wait"
 
     def scaffold_skill_tree(state: IntakeState) -> dict:
-        last = state["messages"][-1]
-        content: str = getattr(last, "content", "")
+        # Use the skill tree from the structured response if available
+        resp: Optional[ClarifyResponse] = state.get("_clarify_response")
+        if resp is not None and resp.skill_tree:
+            return {"skill_tree_json": resp.skill_tree}
 
-        if "```json" in content:
-            json_str = content.split("```json")[1].split("```")[0].strip()
-        elif "```" in content:
-            json_str = content.split("```")[1].split("```")[0].strip()
+        # Fallback: ask the LLM to emit the tree from conversation history
+        from langchain_core.output_parsers import JsonOutputParser
+        follow_up = llm.invoke(
+            state["messages"]
+            + [HumanMessage(content="Output ONLY the JSON skill tree object now, no prose.")]
+        )
+        raw: str = getattr(follow_up, "content", "")
+        if "```json" in raw:
+            json_str = raw.split("```json")[1].split("```")[0].strip()
+        elif "```" in raw:
+            json_str = raw.split("```")[1].split("```")[0].strip()
         else:
-            # Ask the LLM to emit only JSON
-            follow_up = llm.invoke(
-                state["messages"]
-                + [HumanMessage(content="Output ONLY the ```json skill tree block now.")]
-            )
-            raw: str = getattr(follow_up, "content", "")
-            json_str = raw.split("```json")[1].split("```")[0].strip() if "```json" in raw else raw.strip()
+            json_str = raw.strip()
 
         return {"skill_tree_json": json.loads(json_str)}
 
@@ -109,6 +150,7 @@ def build_intake_graph(gh: Optional[GitHubClient] = None, checkpointer=None):
                     "display_name": tree["display_name"],
                     "start_date": date.today().isoformat(),
                     "difficulty": "beginner",
+                    "status": "active",
                 }
             )
             _gh.write_file(

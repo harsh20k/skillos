@@ -1,12 +1,19 @@
 """Slack Bolt app for SkillOS slash commands.
 
 Commands:
-  /learn <goal>       → Intake Lambda (multi-turn onboarding)
-  /done <skill> [msg] → Tracker Lambda (log progress, unlock nodes)
-  /skip <skill>       → Mark skill skipped for today
-  /harder <skill>     → Increase difficulty in active.json
-  /easier <skill>     → Decrease difficulty in active.json
-  /skills, /skill     → List active skills and today's task count (alias)
+  /learn <goal>          → Intake Lambda (multi-turn onboarding)
+  /done <skill> [msg]    → Tracker Lambda (log progress, unlock nodes)
+  /skip <skill>          → Mark skill skipped for today
+  /harder <skill>        → Increase difficulty in active.json
+  /easier <skill>        → Decrease difficulty in active.json
+  /skills, /skill        → List active skills and today's task count (alias)
+  /pause <skill>         → Freeze a skill (excluded from planning + skip detection)
+  /resume <skill>        → Unfreeze a paused skill
+  /list-all-skills       → Visual list of all skills with status badges
+  /todays-tasks          → Show today's full task list with completion status
+  /remaining-tasks       → Show only unchecked tasks for today
+  /reshuffle-tasks       → Regenerate today's tasks via Planner
+  /why-tasks             → Explain the reasoning behind each task (DAG-based, no LLM)
 """
 import json
 import os
@@ -243,6 +250,291 @@ def handle_skills(ack, command, say):
         lines.append(f"• *{display}* ({difficulty}) — {task_info}")
 
     say("\n".join(lines))
+
+
+# ---------------------------------------------------------------------------
+# /list-all-skills — visual overview with status badges
+# ---------------------------------------------------------------------------
+
+@app.command("/list-all-skills")
+def handle_list_all_skills(ack, command, say):
+    ack()
+    from shared.github_client import GitHubClient
+
+    gh = GitHubClient()
+    try:
+        all_skills: list[dict] = json.loads(gh.get_file("skills/active.json"))
+    except Exception as exc:
+        say(f"Error fetching skills: {exc}")
+        return
+
+    _STATUS_BADGE = {
+        "active": ":green_circle: Active",
+        "paused": ":double_vertical_bar: Paused",
+        "completed": ":white_check_mark: Completed",
+    }
+
+    blocks = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": "All Skills", "emoji": True},
+        },
+        {"type": "divider"},
+    ]
+
+    for skill in all_skills:
+        status = skill.get("status", "active")
+        badge = _STATUS_BADGE.get(status, status)
+        difficulty = skill.get("difficulty", "beginner")
+        start = skill.get("start_date", "unknown")
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": (
+                    f"*{skill['display_name']}*  {badge}\n"
+                    f"`{difficulty}` · started {start} · `{skill['name']}`"
+                ),
+            },
+        })
+
+    if not all_skills:
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": "No skills yet. Use `/learn <goal>` to get started."},
+        })
+
+    say(blocks=blocks, text="All Skills")
+
+
+# ---------------------------------------------------------------------------
+# /todays-tasks — full task list with completion status
+# ---------------------------------------------------------------------------
+
+@app.command("/todays-tasks")
+def handle_todays_tasks(ack, command, say):
+    ack()
+    from datetime import date
+    from shared.github_client import GitHubClient
+
+    gh = GitHubClient()
+    today = date.today().isoformat()
+
+    try:
+        active: list[dict] = json.loads(gh.get_file("skills/active.json"))
+    except Exception as exc:
+        say(f"Error: {exc}")
+        return
+
+    active_skills = [s for s in active if s.get("status", "active") == "active"]
+    if not active_skills:
+        say("No active skills. Use `/learn` to start one.")
+        return
+
+    # Collect tasks from each skill's daily file
+    all_lines: list[str] = [f"*Tasks for {today}*\n"]
+    any_found = False
+    for skill in active_skills:
+        name = skill["name"]
+        display = skill["display_name"]
+        try:
+            content = gh.get_file(f"skills/{name}/daily/{today}.md")
+            task_lines = [l for l in content.splitlines() if l.strip().startswith("- [")]
+            if task_lines:
+                any_found = True
+                all_lines.append(f"\n*{display}*")
+                all_lines.extend(task_lines)
+        except Exception:
+            continue
+
+    if not any_found:
+        say("No tasks found for today. The planner runs at 08:00.")
+        return
+    say("\n".join(all_lines))
+
+
+# ---------------------------------------------------------------------------
+# /remaining-tasks — only unchecked tasks
+# ---------------------------------------------------------------------------
+
+@app.command("/remaining-tasks")
+def handle_remaining_tasks(ack, command, say):
+    ack()
+    from datetime import date
+    from shared.github_client import GitHubClient
+
+    gh = GitHubClient()
+    today = date.today().isoformat()
+
+    try:
+        active: list[dict] = json.loads(gh.get_file("skills/active.json"))
+    except Exception as exc:
+        say(f"Error: {exc}")
+        return
+
+    active_skills = [s for s in active if s.get("status", "active") == "active"]
+    lines: list[str] = [f"*Remaining tasks — {today}*\n"]
+    any_found = False
+
+    for skill in active_skills:
+        name = skill["name"]
+        display = skill["display_name"]
+        try:
+            content = gh.get_file(f"skills/{name}/daily/{today}.md")
+            unchecked = [l for l in content.splitlines() if l.strip().startswith("- [ ]")]
+            if unchecked:
+                any_found = True
+                lines.append(f"\n*{display}*")
+                lines.extend(unchecked)
+        except Exception:
+            continue
+
+    if not any_found:
+        say(":tada: All tasks done for today!")
+        return
+    say("\n".join(lines))
+
+
+# ---------------------------------------------------------------------------
+# /reshuffle-tasks — regenerate today's plan via Planner Lambda
+# ---------------------------------------------------------------------------
+
+def _reshuffle_ack(ack):
+    ack(text="Reshuffling tasks (this may take ~15s)…", response_type="ephemeral")
+
+
+def _reshuffle_lazy(command, say):
+    try:
+        _invoke(os.environ["PLANNER_LAMBDA_NAME"], {})
+        say(":arrows_counterclockwise: Tasks reshuffled! Use `/todays-tasks` to see the new plan.")
+    except Exception as exc:
+        say(f"Error reshuffling tasks: `{exc}`")
+
+
+app.command("/reshuffle-tasks")(ack=_reshuffle_ack, lazy=[_reshuffle_lazy])
+
+
+# ---------------------------------------------------------------------------
+# /why-tasks — deterministic DAG-based explanation (no LLM)
+# ---------------------------------------------------------------------------
+
+@app.command("/why-tasks")
+def handle_why_tasks(ack, command, say):
+    ack()
+    from datetime import date
+    from shared.github_client import GitHubClient
+    from agents.planner.skill_tree import parse_skill_tree
+    import re
+
+    gh = GitHubClient()
+    today = date.today().isoformat()
+
+    try:
+        active: list[dict] = json.loads(gh.get_file("skills/active.json"))
+    except Exception as exc:
+        say(f"Error: {exc}")
+        return
+
+    active_skills = [s for s in active if s.get("status", "active") == "active"]
+    lines: list[str] = [f"*Why each task? — {today}*\n"]
+    any_found = False
+
+    for skill in active_skills:
+        name = skill["name"]
+        display = skill["display_name"]
+        try:
+            daily_content = gh.get_file(f"skills/{name}/daily/{today}.md")
+            tree = parse_skill_tree(gh.get_file(f"skills/{name}/skill-tree.md"))
+        except Exception:
+            continue
+
+        node_map = {n["id"]: n for n in tree.get("nodes", [])}
+
+        task_lines = [l for l in daily_content.splitlines() if l.strip().startswith("- [")]
+        if not task_lines:
+            continue
+
+        any_found = True
+        lines.append(f"\n*{display}*")
+
+        for task_line in task_lines:
+            # Extract node_id from `#node-id` at end of line
+            node_match = re.search(r"`#([^`]+)`", task_line)
+            if not node_match:
+                lines.append(f"{task_line}\n  _↳ No node link found._")
+                continue
+
+            node_id = node_match.group(1)
+            node = node_map.get(node_id)
+            if not node:
+                lines.append(f"{task_line}\n  _↳ Node `{node_id}` not in skill tree._")
+                continue
+
+            prereqs = node.get("prerequisites", [])
+            if prereqs:
+                prereq_labels = [node_map[p]["label"] if p in node_map else p for p in prereqs]
+                why = f"Unlocks after: {', '.join(prereq_labels)}"
+            else:
+                why = "Root node — starting point for this skill"
+
+            lines.append(f"{task_line}\n  _↳ *{node['label']}* — {why}_")
+
+    if not any_found:
+        say("No tasks found for today. The planner runs at 08:00.")
+        return
+    say("\n".join(lines))
+
+
+# ---------------------------------------------------------------------------
+# /pause and /resume
+# ---------------------------------------------------------------------------
+
+def _set_skill_status(command, say, new_status: str) -> None:
+    skill = command.get("text", "").strip()
+    action = "pause" if new_status == "paused" else "resume"
+    if not skill:
+        say(f"Usage: `/{action} <skill>`")
+        return
+
+    from shared.github_client import GitHubClient
+
+    gh = GitHubClient()
+    try:
+        active: list[dict] = json.loads(gh.get_file("skills/active.json"))
+        updated = False
+        for s in active:
+            if s["name"] == skill:
+                s["status"] = new_status
+                updated = True
+                break
+
+        if not updated:
+            say(f"Skill `{skill}` not found.")
+            return
+
+        gh.write_file(
+            "skills/active.json",
+            json.dumps(active, indent=2),
+            f"skills: {action} {skill}",
+        )
+        if new_status == "paused":
+            say(f":double_vertical_bar: Paused *{skill}*. It will be excluded from planning and skip detection until you `/resume` it.")
+        else:
+            say(f":arrow_forward: Resumed *{skill}*. It will be included in tomorrow's plan.")
+    except Exception as exc:
+        say(f"Error: {exc}")
+
+
+@app.command("/pause")
+def handle_pause(ack, command, say):
+    ack()
+    _set_skill_status(command, say, "paused")
+
+
+@app.command("/resume")
+def handle_resume(ack, command, say):
+    ack()
+    _set_skill_status(command, say, "active")
 
 
 # ---------------------------------------------------------------------------

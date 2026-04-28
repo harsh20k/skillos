@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SkillOS — LangGraph Agent Flowcharts</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; padding: 32px 24px; }
+  h1 { text-align: center; font-size: 1.5rem; font-weight: 700; margin-bottom: 8px; color: #f8fafc; }
+  .subtitle { text-align: center; color: #94a3b8; font-size: 0.85rem; margin-bottom: 40px; }
+  .agents { display: flex; flex-direction: column; gap: 48px; max-width: 960px; margin: 0 auto; }
+
+  .agent-card { background: #1e2230; border: 1px solid #2d3449; border-radius: 16px; padding: 28px 32px; }
+  .agent-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; }
+  .agent-desc { font-size: 0.78rem; color: #94a3b8; margin-bottom: 28px; }
+
+  /* Flow */
+  .flow { display: flex; flex-direction: column; align-items: flex-start; gap: 0; }
+  .row { display: flex; align-items: center; gap: 0; }
+
+  /* Nodes */
+  .node { border-radius: 10px; padding: 10px 18px; font-size: 0.82rem; font-weight: 600; white-space: nowrap; text-align: center; min-width: 140px; position: relative; }
+  .node-start  { background: #1d4ed8; border: 2px solid #3b82f6; color: #fff; border-radius: 999px; }
+  .node-end    { background: #1d4ed8; border: 2px solid #3b82f6; color: #fff; border-radius: 999px; }
+  .node-step   { background: #16213e; border: 2px solid #334155; color: #e2e8f0; }
+  .node-llm    { background: #1a1a2e; border: 2px solid #7c3aed; color: #c4b5fd; }
+  .node-io     { background: #0f2027; border: 2px solid #0891b2; color: #67e8f9; }
+  .node-router { background: #1c1917; border: 2px solid #d97706; color: #fcd34d; clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); padding: 14px 28px; min-width: 160px; }
+  .node-error  { background: #1c0a0a; border: 2px solid #dc2626; color: #fca5a5; }
+  .node-pause  { background: #1a1207; border: 2px dashed #b45309; color: #fde68a; }
+
+  /* Arrows */
+  .arrow { display: flex; align-items: center; }
+  .arrow-h { width: 32px; height: 2px; background: #475569; position: relative; }
+  .arrow-h::after { content: '▶'; position: absolute; right: -8px; top: -7px; font-size: 10px; color: #475569; }
+  .arrow-v-wrap { display: flex; flex-direction: column; align-items: center; width: 100%; padding-left: 70px; }
+  .arrow-v { width: 2px; height: 24px; background: #475569; position: relative; margin: 0 auto; }
+  .arrow-v::after { content: '▼'; position: absolute; bottom: -9px; left: -5px; font-size: 10px; color: #475569; }
+  .arrow-label { font-size: 0.68rem; color: #f59e0b; background: #1e2230; padding: 2px 8px; border-radius: 4px; border: 1px solid #b45309; white-space: nowrap; margin: 0 6px; }
+  .arrow-label-err { font-size: 0.68rem; color: #f87171; background: #1e2230; padding: 2px 8px; border-radius: 4px; border: 1px solid #dc2626; white-space: nowrap; margin: 0 6px; }
+
+  /* Branch layout */
+  .branch { display: flex; flex-direction: row; align-items: flex-start; gap: 12px; margin-top: 0; }
+  .branch-col { display: flex; flex-direction: column; align-items: center; }
+  .branch-label { font-size: 0.68rem; color: #94a3b8; margin-bottom: 6px; }
+
+  /* Legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; padding-top: 24px; border-top: 1px solid #2d3449; justify-content: center; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: #94a3b8; }
+  .legend-dot { width: 14px; height: 14px; border-radius: 4px; border: 2px solid; }
+
+  /* Dify note */
+  .dify-note { background: #0d1f12; border: 1px solid #166534; border-radius: 10px; padding: 16px 20px; margin-top: 40px; max-width: 960px; margin-left: auto; margin-right: auto; }
+  .dify-note h3 { color: #4ade80; font-size: 0.9rem; margin-bottom: 10px; }
+  .dify-note ul { padding-left: 18px; }
+  .dify-note li { font-size: 0.78rem; color: #86efac; margin-bottom: 6px; line-height: 1.5; }
+  .dify-note code { background: #1a2e1a; padding: 1px 5px; border-radius: 3px; font-family: monospace; font-size: 0.75rem; }
+
+  .tag { display: inline-block; font-size: 0.65rem; padding: 2px 6px; border-radius: 999px; margin-left: 6px; vertical-align: middle; font-weight: 600; }
+  .tag-human { background: #7c3aed22; border: 1px solid #7c3aed; color: #c4b5fd; }
+  .tag-auto   { background: #0891b222; border: 1px solid #0891b2; color: #67e8f9; }
+</style>
+</head>
+<body>
+
+<h1>SkillOS — LangGraph Agent Flowcharts</h1>
+<p class="subtitle">Three agents · Recreate each as a separate workflow in Dify</p>
+
+<div class="agents">
+
+  <!-- ══════════════════════════════════════════
+       AGENT 1: INTAKE
+  ══════════════════════════════════════════ -->
+  <div class="agent-card">
+    <div class="agent-title">🟣 Intake Agent <span class="tag tag-human">Human-in-the-loop</span></div>
+    <div class="agent-desc">Onboards a new skill via Slack DM. Loops clarification turns until ready, then scaffolds the skill tree and writes GitHub files.</div>
+
+    <div class="flow">
+
+      <div class="row"><div class="node node-start">START</div><div class="arrow-h"></div><div class="node node-io">read_notes<br/><span style="font-size:0.68rem;font-weight:400;color:#93c5fd">fetch GitHub notes summary</span></div></div>
+
+      <div class="arrow-v-wrap"><div class="arrow-v"></div></div>
+
+      <div class="row"><div style="width:70px"></div><div class="node node-llm">clarify<br/><span style="font-size:0.68rem;font-weight:400;color:#a78bfa">LLM turn with system prompt + notes</span></div></div>
+
+      <div class="arrow-v-wrap"><div class="arrow-v"></div></div>
+
+      <!-- Router diamond -->
+      <div class="row" style="align-items:flex-start; padding-left: 70px;">
+        <div style="display:flex;flex-direction:column;align-items:center">
+          <div class="node node-router" style="font-size:0.75rem">route_after<br/>_clarify</div>
+          <div style="font-size:0.65rem;color:#94a3b8;margin-top:6px;">READY_SIGNAL in reply<br/>OR turns ≥ 3</div>
+        </div>
+      </div>
+
+      <!-- Branch -->
+      <div style="display:flex;gap:40px;margin-top:8px;padding-left:70px;align-items:flex-start">
+
+        <!-- LEFT: wait branch -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+          <div style="font-size:0.68rem;color:#f59e0b;border:1px solid #b45309;padding:2px 8px;border-radius:4px;">no → "wait"</div>
+          <div class="arrow-v"></div>
+          <div class="node node-pause">⏸ END (pause)<br/><span style="font-size:0.68rem;font-weight:400">resumes on next<br/>Slack message</span></div>
+        </div>
+
+        <!-- RIGHT: scaffold branch -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+          <div style="font-size:0.68rem;color:#4ade80;border:1px solid #166534;padding:2px 8px;border-radius:4px;">yes → "scaffold"</div>
+          <div class="arrow-v"></div>
+          <div class="node node-llm">scaffold_skill_tree<br/><span style="font-size:0.68rem;font-weight:400;color:#a78bfa">parse JSON from LLM reply</span></div>
+          <div class="arrow-v"></div>
+          <div class="node node-io">write_outputs<br/><span style="font-size:0.68rem;font-weight:400;color:#93c5fd">write skill-tree.md, progress.md<br/>update active.json → GitHub</span></div>
+          <div class="arrow-v"></div>
+          <div class="node node-end">END</div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       AGENT 2: PLANNER
+  ══════════════════════════════════════════ -->
+  <div class="agent-card">
+    <div class="agent-title">🔵 Planner Agent <span class="tag tag-auto">Fully Automated</span></div>
+    <div class="agent-desc">Runs on a schedule. Reads active skills + skip state, generates today's task list via LLM, and writes a daily Markdown file to GitHub.</div>
+
+    <div class="flow">
+      <div class="row">
+        <div class="node node-start">START</div>
+        <div class="arrow-h"></div>
+        <div class="node node-io">load_state<br/><span style="font-size:0.68rem;font-weight:400;color:#93c5fd">active.json (GitHub)<br/>skip_state.json (S3)</span></div>
+        <div class="arrow-h"></div>
+        <div class="node node-step">parse_skill_trees<br/><span style="font-size:0.68rem;font-weight:400;color:#94a3b8">fetch + parse each<br/>skill-tree.md</span></div>
+        <div class="arrow-h"></div>
+        <div class="node node-llm">generate_tasks<br/><span style="font-size:0.68rem;font-weight:400;color:#a78bfa">LLM → JSON task list<br/>per unlocked node</span></div>
+        <div class="arrow-h"></div>
+        <div class="node node-io">write_daily_md<br/><span style="font-size:0.68rem;font-weight:400;color:#93c5fd">write daily/{date}.md<br/>clear skip state in S3</span></div>
+        <div class="arrow-h"></div>
+        <div class="node node-end">END</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       AGENT 3: TRACKER
+  ══════════════════════════════════════════ -->
+  <div class="agent-card">
+    <div class="agent-title">🟢 Tracker Agent <span class="tag tag-auto">Fully Automated</span></div>
+    <div class="agent-desc">Triggered when user marks progress in Slack. Validates the skill, generates a progress note via LLM, and commits it + unlocks nodes in GitHub.</div>
+
+    <div class="flow">
+
+      <div class="row">
+        <div class="node node-start">START</div>
+        <div class="arrow-h"></div>
+        <div class="node node-step">validate_skill<br/><span style="font-size:0.68rem;font-weight:400;color:#94a3b8">check skill in active.json</span></div>
+      </div>
+
+      <div class="arrow-v-wrap"><div class="arrow-v"></div></div>
+
+      <div style="display:flex;gap:40px;margin-top:0;padding-left:70px;align-items:flex-start">
+
+        <!-- Error branch -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+          <div style="font-size:0.68rem;color:#f87171;border:1px solid #dc2626;padding:2px 8px;border-radius:4px;">error → skill not found</div>
+          <div class="arrow-v"></div>
+          <div class="node node-error">handle_error<br/><span style="font-size:0.68rem;font-weight:400">return error msg</span></div>
+          <div class="arrow-v"></div>
+          <div class="node node-end">END</div>
+        </div>
+
+        <!-- Happy path -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+          <div style="font-size:0.68rem;color:#4ade80;border:1px solid #166534;padding:2px 8px;border-radius:4px;">ok → skill valid</div>
+          <div class="arrow-v"></div>
+          <div class="node node-step">load_skill_tree<br/><span style="font-size:0.68rem;font-weight:400;color:#94a3b8">fetch skill-tree.md<br/>find unlocked nodes</span></div>
+          <div class="arrow-v"></div>
+          <div class="node node-llm">generate_note<br/><span style="font-size:0.68rem;font-weight:400;color:#a78bfa">LLM → progress note text</span></div>
+          <div class="arrow-v"></div>
+          <div class="node node-io">commit_progress<br/><span style="font-size:0.68rem;font-weight:400;color:#93c5fd">write progress.md<br/>unlock next nodes → GitHub</span></div>
+          <div class="arrow-v"></div>
+          <div class="node node-end">END</div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- Legend -->
+<div class="legend" style="max-width:960px;margin:32px auto 0;">
+  <div class="legend-item"><div class="legend-dot" style="background:#1d4ed822;border-color:#3b82f6"></div>START / END</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#16213e;border-color:#334155"></div>Processing step</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#1a1a2e;border-color:#7c3aed"></div>LLM call</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#0f2027;border-color:#0891b2"></div>I/O (GitHub / S3)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#1c1917;border-color:#d97706"></div>Conditional router</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#1a1207;border-color:#b45309;border-style:dashed"></div>Pause (human-in-loop)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#1c0a0a;border-color:#dc2626"></div>Error path</div>
+</div>
+
+<!-- Dify mapping notes -->
+<div class="dify-note">
+  <h3>📋 Dify Mapping Notes</h3>
+  <ul>
+    <li><strong>Each agent = one Dify Workflow.</strong> Create three separate workflows: <code>intake</code>, <code>planner</code>, <code>tracker</code>.</li>
+    <li><strong>LLM nodes</strong> (purple) → Dify <em>LLM</em> block. Paste the corresponding system prompt and wire in context variables.</li>
+    <li><strong>I/O nodes</strong> (cyan) → Dify <em>HTTP Request</em> or <em>Code</em> block calling GitHub REST API / S3 API.</li>
+    <li><strong>Conditional router</strong> (amber) → Dify <em>IF/ELSE</em> or <em>Question Classifier</em> block. Intake: check if <code>READY_TO_SCAFFOLD</code> signal is present in LLM output <em>or</em> <code>clarification_turns ≥ 3</code>. Tracker: check if <code>error</code> field is non-null.</li>
+    <li><strong>Human-in-the-loop pause</strong> (dashed) → In Dify, use a <em>Conversation</em> workflow (not a one-shot Workflow). The loop is the Dify conversation itself; each Slack reply re-enters the flow at the <em>LLM (clarify)</em> node. Use a variable to count turns.</li>
+    <li><strong>JSON parsing</strong> (scaffold_skill_tree / generate_tasks) → Dify <em>Code</em> block (Python) to strip <code>```json</code> fences and parse.</li>
+    <li><strong>State persistence</strong> (clarification_turns, skip_state) → Dify <em>Variables</em> (conversation-level for Intake, workflow-level for Planner).</li>
+    <li><strong>Planner trigger</strong> → Set the Planner workflow as a Dify <em>Scheduled Task</em> (daily cron).</li>
+  </ul>
+</div>
+
+</body>
+</html>

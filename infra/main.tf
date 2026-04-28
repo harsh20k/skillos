@@ -76,6 +76,32 @@ variable "s3_state_bucket" {
   default     = "skillos-state"
 }
 
+variable "rag_chunk_size" {
+  description = "Max characters per RAG note chunk (configurable for A/B comparison)"
+  default     = "500"
+}
+
+variable "rag_chunk_overlap" {
+  description = "Overlap between consecutive RAG chunks in characters"
+  default     = "100"
+}
+
+variable "rag_top_k" {
+  description = "Number of top-k chunks to retrieve per query"
+  default     = "5"
+}
+
+variable "rag_embedding_model" {
+  description = "Bedrock model ID for note embeddings"
+  default     = "amazon.titan-embed-text-v2:0"
+}
+
+variable "prompt_version" {
+  description = "LangSmith Prompt Hub version tag to pull (e.g. 'latest', 'v2'). Used for A/B testing."
+  type        = string
+  default     = "latest"
+}
+
 # ---------------------------------------------------------------------------
 # S3 state bucket
 # ---------------------------------------------------------------------------

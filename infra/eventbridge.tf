@@ -1,4 +1,28 @@
 # ---------------------------------------------------------------------------
+# RAG Indexer — fires at 06:00 UTC daily (2 hours before Planner)
+# ---------------------------------------------------------------------------
+
+resource "aws_cloudwatch_event_rule" "rag_indexer_daily" {
+  name                = "skillos-rag-indexer-06-00"
+  description         = "Rebuild SkillOS FAISS index from notes vault at 06:00 UTC"
+  schedule_expression = "cron(0 6 * * ? *)"
+}
+
+resource "aws_cloudwatch_event_target" "rag_indexer" {
+  rule      = aws_cloudwatch_event_rule.rag_indexer_daily.name
+  target_id = "skillos-rag-indexer"
+  arn       = aws_lambda_function.rag_indexer.arn
+}
+
+resource "aws_lambda_permission" "rag_indexer_eventbridge" {
+  statement_id  = "AllowEventBridgeRagIndexer"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.rag_indexer.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.rag_indexer_daily.arn
+}
+
+# ---------------------------------------------------------------------------
 # Planner — fires at 08:00 UTC daily
 # ---------------------------------------------------------------------------
 

@@ -40,7 +40,9 @@ def detect_and_write_rollover(gh: GitHubClient) -> dict[str, Any]:
     s3 = boto3.client("s3")
     today = date.today().isoformat()
 
-    active: list[dict] = json.loads(gh.get_file("skills/active.json"))
+    all_skills: list[dict] = json.loads(gh.get_file("skills/active.json"))
+    # Only check skills that are actively running; skip paused/completed
+    active = [s for s in all_skills if s.get("status", "active") == "active"]
     skip_state: dict[str, Any] = {}
 
     for skill in active:

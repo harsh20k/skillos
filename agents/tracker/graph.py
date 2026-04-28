@@ -15,7 +15,7 @@ from langgraph.graph import END, StateGraph
 from typing_extensions import TypedDict
 
 from agents.tracker.github_writer import dry_run_diff, unlock_nodes, write_progress
-from agents.tracker.prompt import TRACKER_SYSTEM_PROMPT
+from agents.tracker.prompt import get_prompt as get_tracker_prompt
 from agents.planner.skill_tree import parse_skill_tree
 from shared.github_client import GitHubClient
 from shared.llm import get_llm
@@ -65,7 +65,7 @@ def build_tracker_graph(gh: Optional[GitHubClient] = None, checkpointer=None):
             f"User message: {state.get('context') or '(none)'}"
         )
         response = llm.invoke(
-            [SystemMessage(content=TRACKER_SYSTEM_PROMPT), HumanMessage(content=prompt)]
+            [SystemMessage(content=get_tracker_prompt()), HumanMessage(content=prompt)]
         )
         note = getattr(response, "content", "")
         # Show diff before committing

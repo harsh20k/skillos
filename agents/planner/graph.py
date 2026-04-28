@@ -16,7 +16,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 from typing_extensions import TypedDict
 
-from agents.planner.prompt import PLANNER_SYSTEM_PROMPT
+from agents.planner.prompt import get_prompt as get_planner_prompt
 from agents.planner.skill_tree import get_unlocked_nodes, parse_skill_tree
 from shared.github_client import GitHubClient
 from shared.llm import get_llm
@@ -40,7 +40,9 @@ def build_planner_graph(gh: Optional[GitHubClient] = None):
 
     def load_state(state: PlannerState) -> dict:
         raw = _gh.get_file("skills/active.json")
-        active: list[dict] = json.loads(raw)
+        all_skills: list[dict] = json.loads(raw)
+        # Only plan for actively running skills; paused/completed are excluded
+        active = [s for s in all_skills if s.get("status", "active") == "active"]
 
         try:
             resp = s3.get_object(Bucket=_S3_BUCKET, Key=_SKIP_STATE_KEY)
@@ -82,7 +84,7 @@ def build_planner_graph(gh: Optional[GitHubClient] = None):
 
         prompt = "\n\n---\n\n".join(context_parts)
         response = llm.invoke(
-            [SystemMessage(content=PLANNER_SYSTEM_PROMPT), HumanMessage(content=prompt)]
+            [SystemMessage(content=get_planner_prompt()), HumanMessage(content=prompt)]
         )
         content: str = getattr(response, "content", "")
         if "```json" in content:
@@ -103,11 +105,13 @@ def build_planner_graph(gh: Optional[GitHubClient] = None):
 
         lines = [f"# Daily Tasks — {today}\n"]
         for skill_name, skill_tasks in by_skill.items():
-            display = next(
-                (s["display_name"] for s in state["active_skills"] if s["name"] == skill_name),
-                skill_name,
+            skill_meta = next(
+                (s for s in state["active_skills"] if s["name"] == skill_name),
+                {},
             )
-            lines.append(f"\n## {display}\n")
+            display = skill_meta.get("display_name", skill_name)
+            difficulty = skill_meta.get("difficulty", "beginner")
+            lines.append(f"\n## {display} `[{difficulty}]`\n")
             for t in skill_tasks:
                 lines.append(f"- [ ] [{t['duration_min']}min] {t['task']}  `#{t['node_id']}`")
 
