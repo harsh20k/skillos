@@ -14,6 +14,7 @@ Commands:
   /remaining-tasks       → Show only unchecked tasks for today
   /reshuffle-tasks       → Regenerate today's tasks via Planner
   /why-tasks             → Explain the reasoning behind each task (DAG-based, no LLM)
+  /skillos <message>     → LLM supervisor — natural language routing to any agent
 """
 import json
 import os
@@ -535,6 +536,40 @@ def handle_pause(ack, command, say):
 def handle_resume(ack, command, say):
     ack()
     _set_skill_status(command, say, "active")
+
+
+# ---------------------------------------------------------------------------
+# /skillos — LLM supervisor: unified natural language entry point
+# ---------------------------------------------------------------------------
+
+def _skillos_ack(ack):
+    ack(text="Thinking…", response_type="ephemeral")
+
+
+def _skillos_lazy(command, say):
+    text = command.get("text", "").strip()
+    if not text:
+        say(
+            "Usage: `/skillos <what you want to do>`\n"
+            "Examples:\n"
+            "• `/skillos show my tasks`\n"
+            "• `/skillos I finished portrait practice today`\n"
+            "• `/skillos pause public-speaking`\n"
+            "• `/skillos I want to learn guitar`"
+        )
+        return
+
+    try:
+        result = _invoke(
+            os.environ["SUPERVISOR_LAMBDA_NAME"],
+            {"message": text, "user_id": command["user_id"]},
+        )
+        say(result.get("reply", "Something went wrong. Try a specific command like `/todays-tasks`."))
+    except Exception as exc:
+        say(f"Something went wrong calling the supervisor: `{exc}`")
+
+
+app.command("/skillos")(ack=_skillos_ack, lazy=[_skillos_lazy])
 
 
 # ---------------------------------------------------------------------------

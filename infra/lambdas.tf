@@ -238,6 +238,27 @@ resource "aws_lambda_function" "rag_indexer" {
   }
 }
 
+resource "aws_lambda_function" "supervisor" {
+  function_name    = "skillos-supervisor"
+  filename         = data.archive_file.skillos.output_path
+  source_code_hash = data.archive_file.skillos.output_base64sha256
+  layers           = local.lambda_layers
+  handler          = "supervisor.handler.lambda_handler"
+  runtime          = "python3.12"
+  role             = aws_iam_role.lambda_exec.arn
+  # Chains LLM classify + handler + LLM format; needs higher timeout and memory
+  memory_size      = 1024
+  timeout          = 90
+
+  environment {
+    variables = merge(local.common_env, {
+      INTAKE_LAMBDA_NAME   = aws_lambda_function.intake.function_name
+      TRACKER_LAMBDA_NAME  = aws_lambda_function.tracker.function_name
+      PLANNER_LAMBDA_NAME  = aws_lambda_function.planner.function_name
+    })
+  }
+}
+
 resource "aws_lambda_function" "slack_bot" {
   function_name    = "skillos-slack-bot"
   filename         = data.archive_file.skillos.output_path
@@ -255,9 +276,10 @@ resource "aws_lambda_function" "slack_bot" {
     variables = merge(local.common_env, {
       SLACK_BOT_TOKEN      = data.aws_secretsmanager_secret_version.slack_bot_token.secret_string
       SLACK_SIGNING_SECRET = data.aws_secretsmanager_secret_version.slack_signing_secret.secret_string
-      INTAKE_LAMBDA_NAME   = aws_lambda_function.intake.function_name
-      TRACKER_LAMBDA_NAME  = aws_lambda_function.tracker.function_name
-      PLANNER_LAMBDA_NAME  = aws_lambda_function.planner.function_name
+      INTAKE_LAMBDA_NAME      = aws_lambda_function.intake.function_name
+      TRACKER_LAMBDA_NAME     = aws_lambda_function.tracker.function_name
+      PLANNER_LAMBDA_NAME     = aws_lambda_function.planner.function_name
+      SUPERVISOR_LAMBDA_NAME  = aws_lambda_function.supervisor.function_name
     })
   }
 }
@@ -272,3 +294,4 @@ output "skip_detector_lambda_name" { value = aws_lambda_function.skip_detector.f
 output "tracker_lambda_name" { value = aws_lambda_function.tracker.function_name }
 output "slack_bot_lambda_name" { value = aws_lambda_function.slack_bot.function_name }
 output "rag_indexer_lambda_name" { value = aws_lambda_function.rag_indexer.function_name }
+output "supervisor_lambda_name" { value = aws_lambda_function.supervisor.function_name }
