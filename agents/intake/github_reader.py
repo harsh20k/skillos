@@ -2,7 +2,7 @@
 
 Two retrieval modes:
 - fetch_notes_summary: legacy fallback — concatenates first N chars of each note.
-- fetch_notes_for_query: RAG-backed retrieval when the FAISS index exists on S3.
+- fetch_notes_for_query: RAG-backed retrieval via S3 Vectors.
   Falls back to fetch_notes_summary if the index is missing or RAG is disabled.
 """
 import os
@@ -35,8 +35,7 @@ def fetch_notes_summary(client: GitHubClient) -> str:
 def fetch_notes_for_query(client: GitHubClient, query: str) -> str:
     """Return relevant note chunks for the given query using RAG.
 
-    Uses FAISS-backed retrieval when the index exists on S3 (WS1).
-    Falls back to fetch_notes_summary if RAG is unavailable.
+    Uses S3 Vectors for retrieval. Falls back to fetch_notes_summary if RAG is unavailable.
     """
     s3_bucket = os.environ.get("S3_BUCKET", "skillos-state")
     top_k = int(os.environ.get("RAG_TOP_K", "5"))

@@ -96,6 +96,11 @@ variable "rag_embedding_model" {
   default     = "amazon.titan-embed-text-v2:0"
 }
 
+variable "rag_vector_bucket" {
+  description = "S3 Vectors vector bucket name for the RAG notes index"
+  default     = "skillos-rag-vectors"
+}
+
 variable "prompt_version" {
   description = "LangSmith Prompt Hub version tag to pull (e.g. 'latest', 'v2'). Used for A/B testing."
   type        = string
@@ -115,4 +120,20 @@ resource "aws_s3_bucket_versioning" "state" {
   versioning_configuration {
     status = "Enabled"
   }
+}
+
+# ---------------------------------------------------------------------------
+# S3 Vectors — vector bucket + notes index
+# ---------------------------------------------------------------------------
+
+resource "aws_s3vectors_vector_bucket" "rag" {
+  vector_bucket_name = var.rag_vector_bucket
+}
+
+resource "aws_s3vectors_index" "notes" {
+  vector_bucket_name = aws_s3vectors_vector_bucket.rag.vector_bucket_name
+  index_name         = "notes"
+  data_type          = "float32"
+  dimension          = 1536
+  distance_metric    = "cosine"
 }

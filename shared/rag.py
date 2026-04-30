@@ -1,34 +1,33 @@
-"""RAG utilities for SkillOS: chunking, embedding, FAISS index build and query.
+"""RAG utilities for SkillOS: chunking, embedding, S3 Vectors index upsert and query.
 
-Index layout on S3:
-  s3://{bucket}/rag/notes.faiss  — FAISS flat IP index (float32 vectors)
-  s3://{bucket}/rag/chunks.json  — parallel list of chunk metadata dicts
+Index layout:
+  S3 Vector Bucket: var.rag_vector_bucket
+    Index name: "notes"
+    Vector keys: "{sha256(path)[:8]}-{chunk_idx}"
+    Metadata per vector: {"text": ..., "path": ..., "chunk_idx": ...}
+
+  S3 State Bucket: {S3_BUCKET}/rag/file_hashes.json
+    {"notes/foo.md": "<sha256>", ...}  — used for incremental diffing
 
 Configuration (env vars):
   RAG_CHUNK_SIZE       default 500  — max chars per chunk
   RAG_CHUNK_OVERLAP    default 100  — overlap between consecutive chunks
   RAG_TOP_K            default 5    — number of chunks returned per query
   RAG_EMBEDDING_MODEL  default amazon.titan-embed-text-v2:0
+  VECTOR_BUCKET        — S3 Vectors vector bucket name
 """
 from __future__ import annotations
 
-import io
+import hashlib
 import json
 import os
-import tempfile
 from typing import Optional
 
 import boto3
-import numpy as np
 
 _DEFAULT_EMBEDDING_MODEL = "amazon.titan-embed-text-v2:0"
-_FAISS_KEY = "rag/notes.faiss"
-_CHUNKS_KEY = "rag/chunks.json"
-
-# Module-level index cache to reuse across Lambda warm invocations
-_cached_index = None
-_cached_chunks: Optional[list[dict]] = None
-_cached_bucket: Optional[str] = None
+_VECTOR_INDEX_NAME = "notes"
+_HASHES_KEY = "rag/file_hashes.json"
 
 
 # ---------------------------------------------------------------------------
@@ -75,132 +74,196 @@ def _get_bedrock_client():
     return boto3.client("bedrock-runtime", region_name=region)
 
 
+def _get_s3vectors_client():
+    region = os.environ.get("AWS_REGION", "us-east-1")
+    return boto3.client("s3vectors", region_name=region)
+
+
 # ---------------------------------------------------------------------------
-# Index build (called by rag_indexer Lambda)
+# Stable chunk key: deterministic across re-runs
 # ---------------------------------------------------------------------------
 
-def build_index(
+def _chunk_key(path: str, chunk_idx: int) -> str:
+    return f"{hashlib.sha256(path.encode()).hexdigest()[:8]}-{chunk_idx}"
+
+
+# ---------------------------------------------------------------------------
+# Hash map helpers (incremental diff)
+# ---------------------------------------------------------------------------
+
+def _load_hashes(s3_bucket: str) -> dict[str, str]:
+    s3 = boto3.client("s3")
+    try:
+        resp = s3.get_object(Bucket=s3_bucket, Key=_HASHES_KEY)
+        return json.loads(resp["Body"].read())
+    except s3.exceptions.NoSuchKey:
+        return {}
+    except Exception:
+        return {}
+
+
+def _save_hashes(s3_bucket: str, hashes: dict[str, str]) -> None:
+    s3 = boto3.client("s3")
+    s3.put_object(
+        Bucket=s3_bucket,
+        Key=_HASHES_KEY,
+        Body=json.dumps(hashes, ensure_ascii=False).encode(),
+        ContentType="application/json",
+    )
+
+
+def _file_hash(content: str) -> str:
+    return hashlib.sha256(content.encode()).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# Index upsert (called by rag_indexer Lambda)
+# ---------------------------------------------------------------------------
+
+def upsert_index(
     notes: dict[str, str],
     s3_bucket: str,
+    vector_bucket: str,
     chunk_size: Optional[int] = None,
     overlap: Optional[int] = None,
     embedding_model: Optional[str] = None,
-) -> int:
-    """Build a FAISS index from a dict of {path: content} and upload to S3.
+) -> dict:
+    """Incrementally upsert vectors into S3 Vectors for changed/new/deleted notes.
 
     Args:
-        notes: mapping of GitHub path → file content
-        s3_bucket: S3 bucket name for storing the index
+        notes: mapping of GitHub path → file content (current state)
+        s3_bucket: S3 bucket for storing file_hashes.json
+        vector_bucket: S3 Vectors vector bucket name
         chunk_size, overlap, embedding_model: override env-var defaults
 
     Returns:
-        Number of chunks indexed.
+        Stats dict with keys: files_added, files_updated, files_deleted, chunks_upserted, chunks_deleted, files_skipped
     """
-    import faiss  # type: ignore
-
     chunk_size = chunk_size or int(os.environ.get("RAG_CHUNK_SIZE", "500"))
     overlap = overlap or int(os.environ.get("RAG_CHUNK_OVERLAP", "100"))
     model_id = embedding_model or os.environ.get("RAG_EMBEDDING_MODEL", _DEFAULT_EMBEDDING_MODEL)
     bedrock = _get_bedrock_client()
+    s3v = _get_s3vectors_client()
 
-    all_chunks: list[dict] = []
-    for path, content in notes.items():
-        all_chunks.extend(chunk_text(content, path, chunk_size, overlap))
+    stored_hashes = _load_hashes(s3_bucket)
+    current_paths = set(notes.keys())
+    stored_paths = set(stored_hashes.keys())
 
-    if not all_chunks:
-        return 0
+    deleted_paths = stored_paths - current_paths
+    changed_paths = {
+        path for path in current_paths
+        if _file_hash(notes[path]) != stored_hashes.get(path)
+    }
+    skipped = len(current_paths) - len(changed_paths)
 
-    texts = [c["text"] for c in all_chunks]
-    vectors = _embed_batch(texts, model_id, bedrock)
-    matrix = np.array(vectors, dtype=np.float32)
+    stats = {
+        "files_added": len(changed_paths - stored_paths),
+        "files_updated": len(changed_paths & stored_paths),
+        "files_deleted": len(deleted_paths),
+        "chunks_upserted": 0,
+        "chunks_deleted": 0,
+        "files_skipped": skipped,
+    }
 
-    dim = matrix.shape[1]
-    index = faiss.IndexFlatIP(dim)  # inner-product (cosine after normalisation)
-    faiss.normalize_L2(matrix)
-    index.add(matrix)
+    # --- Delete vectors for removed files ---
+    for path in deleted_paths:
+        old_chunks = chunk_text(stored_hashes.get(path, ""), path, chunk_size, overlap)
+        keys_to_delete = [_chunk_key(path, c["chunk_idx"]) for c in old_chunks]
+        if keys_to_delete:
+            s3v.delete_vectors(
+                vectorBucketName=vector_bucket,
+                indexName=_VECTOR_INDEX_NAME,
+                keys=keys_to_delete,
+            )
+            stats["chunks_deleted"] += len(keys_to_delete)
+        stored_hashes.pop(path, None)
 
-    # Serialise FAISS index to bytes
-    with tempfile.NamedTemporaryFile(suffix=".faiss", delete=False) as tmp:
-        faiss.write_index(index, tmp.name)
-        with open(tmp.name, "rb") as f:
-            index_bytes = f.read()
+    # --- Upsert vectors for changed/new files ---
+    for path in changed_paths:
+        content = notes[path]
+        chunks = chunk_text(content, path, chunk_size, overlap)
 
-    s3 = boto3.client("s3")
-    s3.put_object(Bucket=s3_bucket, Key=_FAISS_KEY, Body=index_bytes)
-    s3.put_object(
-        Bucket=s3_bucket,
-        Key=_CHUNKS_KEY,
-        Body=json.dumps(all_chunks, ensure_ascii=False).encode(),
-        ContentType="application/json",
-    )
+        if not chunks:
+            stored_hashes[path] = _file_hash(content)
+            continue
 
-    # Invalidate module-level cache so next query loads fresh index
-    global _cached_index, _cached_chunks, _cached_bucket
-    _cached_index = None
-    _cached_chunks = None
-    _cached_bucket = None
+        texts = [c["text"] for c in chunks]
+        vectors = _embed_batch(texts, model_id, bedrock)
 
-    return len(all_chunks)
+        put_vectors = [
+            {
+                "key": _chunk_key(path, c["chunk_idx"]),
+                "data": {"float32": v},
+                "metadata": {
+                    "text": c["text"],
+                    "path": c["path"],
+                    "chunk_idx": c["chunk_idx"],
+                },
+            }
+            for c, v in zip(chunks, vectors)
+        ]
+
+        # S3 Vectors PutVectors accepts up to 500 vectors per call
+        _batch_put_vectors(s3v, vector_bucket, put_vectors)
+        stats["chunks_upserted"] += len(put_vectors)
+        stored_hashes[path] = _file_hash(content)
+
+    _save_hashes(s3_bucket, stored_hashes)
+    return stats
+
+
+def _batch_put_vectors(s3v_client, vector_bucket: str, vectors: list[dict], batch_size: int = 500) -> None:
+    """PutVectors in batches of up to 500 (S3 Vectors API limit)."""
+    for i in range(0, len(vectors), batch_size):
+        batch = vectors[i : i + batch_size]
+        s3v_client.put_vectors(
+            vectorBucketName=vector_bucket,
+            indexName=_VECTOR_INDEX_NAME,
+            vectors=batch,
+        )
 
 
 # ---------------------------------------------------------------------------
 # Index query (called at intake time)
 # ---------------------------------------------------------------------------
 
-def _load_index(s3_bucket: str):
-    """Download and cache the FAISS index and chunk metadata from S3."""
-    import faiss  # type: ignore
-
-    global _cached_index, _cached_chunks, _cached_bucket
-
-    if _cached_index is not None and _cached_bucket == s3_bucket:
-        return _cached_index, _cached_chunks
-
-    s3 = boto3.client("s3")
-    idx_resp = s3.get_object(Bucket=s3_bucket, Key=_FAISS_KEY)
-    idx_bytes = idx_resp["Body"].read()
-
-    with tempfile.NamedTemporaryFile(suffix=".faiss", delete=False) as tmp:
-        tmp.write(idx_bytes)
-        tmp_path = tmp.name
-    index = faiss.read_index(tmp_path)
-
-    chunks_resp = s3.get_object(Bucket=s3_bucket, Key=_CHUNKS_KEY)
-    chunks: list[dict] = json.loads(chunks_resp["Body"].read())
-
-    _cached_index = index
-    _cached_chunks = chunks
-    _cached_bucket = s3_bucket
-    return index, chunks
-
-
-def query_notes(query: str, s3_bucket: str, top_k: int = 5) -> list[dict]:
-    """Embed a query and return top-k relevant note chunks.
+def query_notes(
+    query: str,
+    s3_bucket: str,
+    top_k: int = 5,
+    vector_bucket: Optional[str] = None,
+) -> list[dict]:
+    """Embed a query and return top-k relevant note chunks via S3 Vectors.
 
     Returns a list of dicts with keys: text, source (path), score, chunk_idx.
-    Raises an exception if the index does not exist on S3 (caller should catch).
+    Raises an exception if the index does not exist (caller should catch).
     """
-    import faiss  # type: ignore
+    vector_bucket = vector_bucket or os.environ.get("VECTOR_BUCKET", "")
+    if not vector_bucket:
+        raise ValueError("VECTOR_BUCKET env var is required for S3 Vectors query")
 
     model_id = os.environ.get("RAG_EMBEDDING_MODEL", _DEFAULT_EMBEDDING_MODEL)
     bedrock = _get_bedrock_client()
-
-    index, chunks = _load_index(s3_bucket)
+    s3v = _get_s3vectors_client()
 
     query_vecs = _embed_batch([query], model_id, bedrock)
-    query_matrix = np.array(query_vecs, dtype=np.float32)
-    faiss.normalize_L2(query_matrix)
+    query_vector = query_vecs[0]
 
-    scores, indices = index.search(query_matrix, top_k)
+    resp = s3v.query_vectors(
+        vectorBucketName=vector_bucket,
+        indexName=_VECTOR_INDEX_NAME,
+        queryVector={"float32": query_vector},
+        topK=top_k,
+        returnMetadata=True,
+    )
+
     results: list[dict] = []
-    for rank, (score, i) in enumerate(zip(scores[0], indices[0])):
-        if i < 0:
-            continue
-        chunk = chunks[i]
+    for item in resp.get("vectors", []):
+        meta = item.get("metadata", {})
         results.append({
-            "text": chunk["text"],
-            "source": chunk["path"],
-            "score": float(score),
-            "chunk_idx": chunk.get("chunk_idx", rank),
+            "text": meta.get("text", ""),
+            "source": meta.get("path", ""),
+            "score": float(item.get("score", 0.0)),
+            "chunk_idx": meta.get("chunk_idx", 0),
         })
     return results

@@ -108,6 +108,16 @@ resource "aws_iam_role_policy" "lambda_policy" {
           Effect   = "Allow"
           Action   = ["lambda:InvokeFunction"]
           Resource = "*"
+        },
+        {
+          Effect = "Allow"
+          Action = [
+            "s3vectors:PutVectors",
+            "s3vectors:QueryVectors",
+            "s3vectors:DeleteVectors",
+            "s3vectors:GetIndex",
+          ]
+          Resource = "arn:aws:s3vectors:*:*:bucket/${var.rag_vector_bucket}/index/*"
         }
       ],
       var.bedrock_assume_role_arn == "" ? [] : [
@@ -145,6 +155,7 @@ locals {
     GITHUB_REPO           = var.github_repo
     GITHUB_BRANCH         = var.github_branch
     S3_BUCKET             = var.s3_state_bucket
+    VECTOR_BUCKET         = var.rag_vector_bucket
     BEDROCK_MODEL_ID      = var.bedrock_model_id
     LANGCHAIN_TRACING_V2  = "true"
     LANGCHAIN_API_KEY     = data.aws_secretsmanager_secret_version.langsmith_api_key.secret_string
@@ -229,8 +240,8 @@ resource "aws_lambda_function" "rag_indexer" {
   handler          = "agents.rag_indexer.handler.lambda_handler"
   runtime          = "python3.12"
   role             = aws_iam_role.lambda_exec.arn
-  # FAISS index build can be slow for large vaults; 512 MB for numpy/FAISS ops
-  memory_size      = 512
+  # No in-memory index; S3 Vectors handles search server-side
+  memory_size      = 128
   timeout          = 300
 
   environment {
