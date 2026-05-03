@@ -32,9 +32,9 @@ from agents.planner.prompt import PLANNER_SYSTEM_PROMPT
 from agents.tracker.prompt import TRACKER_SYSTEM_PROMPT
 
 PROMPTS = {
-    "skillos/intake-system": INTAKE_SYSTEM_PROMPT,
-    "skillos/planner-system": PLANNER_SYSTEM_PROMPT,
-    "skillos/tracker-system": TRACKER_SYSTEM_PROMPT,
+    "intake-system": INTAKE_SYSTEM_PROMPT,
+    "planner-system": PLANNER_SYSTEM_PROMPT,
+    "tracker-system": TRACKER_SYSTEM_PROMPT,
 }
 
 
