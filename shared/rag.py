@@ -12,8 +12,9 @@ Index layout:
 Configuration (env vars):
   RAG_CHUNK_SIZE       default 500  — max chars per chunk
   RAG_CHUNK_OVERLAP    default 100  — overlap between consecutive chunks
-  RAG_TOP_K            default 5    — number of chunks returned per query
+  RAG_TOP_K            default 5     — number of chunks returned per query
   RAG_EMBEDDING_MODEL  default amazon.titan-embed-text-v2:0
+  RAG_EMBED_SLEEP      default 0.25  — seconds between Titan calls; set to 0 for bulk indexing
   VECTOR_BUCKET        — S3 Vectors vector bucket name
 """
 from __future__ import annotations
@@ -70,8 +71,11 @@ def _embed_one(text: str, model_id: str, bedrock_client) -> list[float]:
                 contentType="application/json",
                 accept="application/json",
             )
-            # Small steady-state delay to stay under Titan's per-second quota
-            time.sleep(0.25)
+            # Steady-state delay to stay under Titan's per-second quota.
+            # Set RAG_EMBED_SLEEP=0 for bulk/initial indexing runs (throttles handled by backoff).
+            sleep_s = float(os.environ.get("RAG_EMBED_SLEEP", "0.25"))
+            if sleep_s > 0:
+                time.sleep(sleep_s)
             return json.loads(resp["body"].read())["embedding"]
         except Exception as e:
             code = ""
@@ -247,9 +251,13 @@ def upsert_index(
         stored_hashes.pop(path, None)
 
     # --- Upsert vectors for changed/new files ---
-    for path in changed_paths:
+    total_changed = len(changed_paths)
+    for i, path in enumerate(sorted(changed_paths), 1):
         content = notes[path]
         chunks = chunk_text(content, path, chunk_size, overlap)
+
+        import logging as _log
+        _log.getLogger().info("[%d/%d] embedding %s (%d chunks)", i, total_changed, path, len(chunks))
 
         if not chunks:
             stored_hashes[path] = _file_hash(content)
