@@ -3,12 +3,12 @@
 Triggered by EventBridge at 06:00 daily (before the Planner at 08:00).
 Can also be invoked manually: aws lambda invoke --function-name skillos-rag-indexer.
 
-Reads all notes/**/*.md from GitHub, diffs against stored file hashes, embeds
-only changed files, and upserts/deletes vectors in the S3 Vectors index.
+Reads .md files from S3 (vault/ prefix, populated by GitHub Actions on push),
+diffs against stored file hashes, embeds only changed files, and upserts/deletes
+vectors in the S3 Vectors index.
 
 Environment variables:
-  GITHUB_TOKEN, GITHUB_REPO, GITHUB_BRANCH  — GitHub access
-  S3_BUCKET                                  — state bucket (stores file_hashes.json)
+  S3_BUCKET                                  — state bucket (vault/ prefix + file_hashes.json)
   VECTOR_BUCKET                              — S3 Vectors vector bucket name
   RAG_CHUNK_SIZE     (optional, default 500)
   RAG_CHUNK_OVERLAP  (optional, default 100)
@@ -19,12 +19,13 @@ from __future__ import annotations
 import logging
 import os
 
+import boto3
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
 def lambda_handler(event: dict, context) -> dict:
-    from shared.github_client import GitHubClient
     from shared.rag import upsert_index
 
     s3_bucket = os.environ.get("S3_BUCKET", "skillos-state")
@@ -33,13 +34,11 @@ def lambda_handler(event: dict, context) -> dict:
     if not vector_bucket:
         raise ValueError("VECTOR_BUCKET env var is required")
 
-    gh = GitHubClient()
-
-    notes = _fetch_all_notes(gh)
-    logger.info("Fetched %d note files from GitHub", len(notes))
+    notes = _fetch_all_notes_from_s3(s3_bucket)
+    logger.info("Fetched %d note files from S3", len(notes))
 
     if not notes:
-        logger.warning("No notes found — index not updated.")
+        logger.warning("No notes found in S3 — index not updated.")
         return {"status": "skipped", "reason": "no notes found"}
 
     stats = upsert_index(notes=notes, s3_bucket=s3_bucket, vector_bucket=vector_bucket)
@@ -58,26 +57,21 @@ def lambda_handler(event: dict, context) -> dict:
     return {"status": "ok", "files_indexed": len(notes), **stats}
 
 
-def _fetch_all_notes(gh) -> dict[str, str]:
-    """Return {path: content} for all .md files recursively under notes/."""
+_INDEX_ROOTS = ["notes", "Slipbox", "Inbox", "Outbox", "Areas"]
+_VAULT_PREFIX = "vault/"
+
+
+def _fetch_all_notes_from_s3(s3_bucket: str) -> dict[str, str]:
+    """Return {s3_key: content} for all .md files under vault/ indexed roots."""
+    s3 = boto3.client("s3")
     notes: dict[str, str] = {}
-    _walk(gh, "notes", notes)
+    for root in _INDEX_ROOTS:
+        prefix = f"{_VAULT_PREFIX}{root}/"
+        paginator = s3.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=s3_bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                if key.endswith(".md"):
+                    body = s3.get_object(Bucket=s3_bucket, Key=key)["Body"]
+                    notes[key] = body.read().decode("utf-8", errors="replace")
     return notes
-
-
-def _walk(gh, path: str, acc: dict[str, str]) -> None:
-    """Recursively walk a GitHub directory path and collect .md files."""
-    try:
-        entries = gh.list_dir(path)
-    except Exception:
-        return
-
-    for entry in entries:
-        if entry.endswith(".md"):
-            try:
-                content = gh.get_file(entry)
-                acc[entry] = content
-            except Exception:
-                continue
-        elif "." not in entry.split("/")[-1]:
-            _walk(gh, entry, acc)

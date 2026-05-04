@@ -16,9 +16,17 @@ data "archive_file" "skillos_layer" {
   }
 }
 
+resource "aws_s3_object" "skillos_layer" {
+  bucket = aws_s3_bucket.state.id
+  key    = "lambda-layers/skillos-python-deps.zip"
+  source = data.archive_file.skillos_layer.output_path
+  etag   = data.archive_file.skillos_layer.output_md5
+}
+
 resource "aws_lambda_layer_version" "skillos_deps" {
   layer_name               = "skillos-python-deps"
-  filename                 = data.archive_file.skillos_layer.output_path
+  s3_bucket                = aws_s3_bucket.state.id
+  s3_key                   = aws_s3_object.skillos_layer.key
   compatible_runtimes      = ["python3.12"]
   compatible_architectures = ["x86_64"]
   source_code_hash         = data.archive_file.skillos_layer.output_base64sha256
@@ -241,12 +249,16 @@ resource "aws_lambda_function" "rag_indexer" {
   runtime          = "python3.12"
   role             = aws_iam_role.lambda_exec.arn
   # No in-memory index; S3 Vectors handles search server-side
-  memory_size      = 128
-  timeout          = 300
-
+  memory_size      = 512
+  timeout          = 900
   environment {
     variables = local.common_env
   }
+}
+
+resource "aws_lambda_function_event_invoke_config" "rag_indexer" {
+  function_name          = aws_lambda_function.rag_indexer.function_name
+  maximum_retry_attempts = 0
 }
 
 resource "aws_lambda_function" "supervisor" {

@@ -21,9 +21,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import time
 from typing import Optional
 
 import boto3
+from botocore.exceptions import ClientError
 
 _DEFAULT_EMBEDDING_MODEL = "amazon.titan-embed-text-v2:0"
 _VECTOR_INDEX_NAME = "notes"
@@ -53,25 +55,91 @@ def chunk_text(text: str, path: str, chunk_size: int = 500, overlap: int = 100) 
 # Embedding
 # ---------------------------------------------------------------------------
 
+def _embed_one(text: str, model_id: str, bedrock_client) -> list[float]:
+    """Embed a single text with exponential backoff on throttling.
+
+    botocore retries are disabled on this client (max_attempts=1) so our
+    backoff loop has full control over retry timing.
+    """
+    body = json.dumps({"inputText": text[:8192]})
+    for attempt in range(8):
+        try:
+            resp = bedrock_client.invoke_model(
+                modelId=model_id,
+                body=body,
+                contentType="application/json",
+                accept="application/json",
+            )
+            # Small steady-state delay to stay under Titan's per-second quota
+            time.sleep(0.25)
+            return json.loads(resp["body"].read())["embedding"]
+        except Exception as e:
+            code = ""
+            if hasattr(e, "response"):
+                code = e.response.get("Error", {}).get("Code", "")
+            import logging as _log
+            _log.getLogger().warning("embed attempt=%d code=%r type=%s", attempt, code, type(e).__name__)
+            if code in ("ThrottlingException", "TooManyRequestsException") and attempt < 7:
+                wait = min(2 ** attempt + 1, 60)
+                _log.getLogger().info("throttled — sleeping %ds", wait)
+                time.sleep(wait)
+                continue
+            raise
+
+
 def _embed_batch(texts: list[str], model_id: str, bedrock_client) -> list[list[float]]:
     """Embed a batch of texts using Bedrock Titan Embeddings."""
-    vectors: list[list[float]] = []
-    for text in texts:
-        body = json.dumps({"inputText": text[:8192]})
-        resp = bedrock_client.invoke_model(
-            modelId=model_id,
-            body=body,
-            contentType="application/json",
-            accept="application/json",
-        )
-        result = json.loads(resp["body"].read())
-        vectors.append(result["embedding"])
-    return vectors
+    return [_embed_one(t, model_id, bedrock_client) for t in texts]
+
+
+_rag_bedrock_client = None
+_rag_bedrock_expiry = None
 
 
 def _get_bedrock_client():
+    """Return a bedrock-runtime client, optionally via cross-account assume-role.
+
+    Mirrors the pattern in shared/llm.py but returns a plain boto3 client
+    (not a LangChain wrapper) with botocore retries disabled so our backoff
+    loop owns all retry logic.
+    """
+    from botocore.config import Config
+    from datetime import datetime, timezone
+
+    global _rag_bedrock_client, _rag_bedrock_expiry
+
+    cfg = Config(retries={"max_attempts": 1, "mode": "standard"})
     region = os.environ.get("BEDROCK_REGION", os.environ.get("AWS_REGION", "us-east-1"))
-    return boto3.client("bedrock-runtime", region_name=region)
+    role_arn = os.environ.get("BEDROCK_ASSUME_ROLE_ARN", "")
+
+    if not role_arn:
+        return boto3.client("bedrock-runtime", region_name=region, config=cfg)
+
+    # Cross-account: cache creds per container, refresh 60s before expiry
+    now = datetime.now(timezone.utc)
+    if _rag_bedrock_client is not None and _rag_bedrock_expiry is not None:
+        if (_rag_bedrock_expiry - now).total_seconds() > 60:
+            return _rag_bedrock_client
+
+    session_name = os.environ.get("BEDROCK_ASSUME_ROLE_SESSION_NAME", "skillos-rag-session")
+    external_id = os.environ.get("BEDROCK_ASSUME_ROLE_EXTERNAL_ID", "")
+
+    assume_kwargs: dict = {"RoleArn": role_arn, "RoleSessionName": session_name}
+    if external_id:
+        assume_kwargs["ExternalId"] = external_id
+
+    creds = boto3.client("sts").assume_role(**assume_kwargs)["Credentials"]
+
+    _rag_bedrock_client = boto3.client(
+        "bedrock-runtime",
+        region_name=region,
+        aws_access_key_id=creds["AccessKeyId"],
+        aws_secret_access_key=creds["SecretAccessKey"],
+        aws_session_token=creds["SessionToken"],
+        config=cfg,
+    )
+    _rag_bedrock_expiry = creds["Expiration"]
+    return _rag_bedrock_client
 
 
 def _get_s3vectors_client():
