@@ -251,40 +251,48 @@ def upsert_index(
         stored_hashes.pop(path, None)
 
     # --- Upsert vectors for changed/new files ---
+    # Save hashes every CHECKPOINT_EVERY files so partial progress survives timeouts.
+    CHECKPOINT_EVERY = 15
+
+    import logging as _log
     total_changed = len(changed_paths)
+    pending_vectors: list[dict] = []
+
     for i, path in enumerate(sorted(changed_paths), 1):
         content = notes[path]
         chunks = chunk_text(content, path, chunk_size, overlap)
 
-        import logging as _log
         _log.getLogger().info("[%d/%d] embedding %s (%d chunks)", i, total_changed, path, len(chunks))
 
         if not chunks:
             stored_hashes[path] = _file_hash(content)
-            continue
+        else:
+            texts = [c["text"] for c in chunks]
+            vectors = _embed_batch(texts, model_id, bedrock)
 
-        texts = [c["text"] for c in chunks]
-        vectors = _embed_batch(texts, model_id, bedrock)
+            pending_vectors.extend(
+                {
+                    "key": _chunk_key(path, c["chunk_idx"]),
+                    "data": {"float32": v},
+                    "metadata": {
+                        "text": c["text"],
+                        "path": c["path"],
+                        "chunk_idx": c["chunk_idx"],
+                    },
+                }
+                for c, v in zip(chunks, vectors)
+            )
+            stored_hashes[path] = _file_hash(content)
+            stats["chunks_upserted"] += len(chunks)
 
-        put_vectors = [
-            {
-                "key": _chunk_key(path, c["chunk_idx"]),
-                "data": {"float32": v},
-                "metadata": {
-                    "text": c["text"],
-                    "path": c["path"],
-                    "chunk_idx": c["chunk_idx"],
-                },
-            }
-            for c, v in zip(chunks, vectors)
-        ]
+        # Flush vectors + checkpoint hashes every CHECKPOINT_EVERY files
+        if i % CHECKPOINT_EVERY == 0 or i == total_changed:
+            if pending_vectors:
+                _batch_put_vectors(s3v, vector_bucket, pending_vectors)
+                pending_vectors = []
+            _save_hashes(s3_bucket, stored_hashes)
+            _log.getLogger().info("Checkpoint saved at file %d/%d", i, total_changed)
 
-        # S3 Vectors PutVectors accepts up to 500 vectors per call
-        _batch_put_vectors(s3v, vector_bucket, put_vectors)
-        stats["chunks_upserted"] += len(put_vectors)
-        stored_hashes[path] = _file_hash(content)
-
-    _save_hashes(s3_bucket, stored_hashes)
     return stats
 
 
