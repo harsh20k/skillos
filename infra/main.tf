@@ -107,6 +107,12 @@ variable "prompt_version" {
   default     = "latest"
 }
 
+variable "rag_embed_sleep" {
+  description = "Seconds to sleep between Titan embedding calls. Set to '0' for bulk/initial indexing, '0.25' for steady-state."
+  type        = string
+  default     = "0.25"
+}
+
 # ---------------------------------------------------------------------------
 # S3 state bucket
 # ---------------------------------------------------------------------------

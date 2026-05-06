@@ -70,7 +70,7 @@ class GitHubClient:
             if attempt < max_attempts - 1:
                 time.sleep(0.2 * (attempt + 1))
                 continue
-            raise
+            raise RuntimeError(f"write_file: exhausted {max_attempts} attempts for {path}")
 
     def commit_exists_today(self, skill: str) -> bool:
         """Return True if a progress commit exists for skill today (UTC)."""

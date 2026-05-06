@@ -122,6 +122,7 @@ resource "aws_iam_role_policy" "lambda_policy" {
           Action = [
             "s3vectors:PutVectors",
             "s3vectors:QueryVectors",
+            "s3vectors:GetVectors",
             "s3vectors:DeleteVectors",
             "s3vectors:GetIndex",
           ]
@@ -172,6 +173,7 @@ locals {
     RAG_CHUNK_OVERLAP     = var.rag_chunk_overlap
     RAG_TOP_K             = var.rag_top_k
     RAG_EMBEDDING_MODEL   = var.rag_embedding_model
+    RAG_EMBED_SLEEP       = var.rag_embed_sleep
     PROMPT_VERSION        = var.prompt_version
   }, local.bedrock_cross_account_env)
 }
@@ -188,7 +190,10 @@ resource "aws_lambda_function" "intake" {
   handler          = "agents.intake.handler.lambda_handler"
   runtime          = "python3.12"
   role             = aws_iam_role.lambda_exec.arn
-  timeout          = 60
+  # Intake is multi-turn and can hit large prompt/checkpoint payloads.
+  # Raise memory + timeout to avoid repeated 60s timeouts and OOM.
+  memory_size      = 1024
+  timeout          = 180
 
   environment {
     variables = local.common_env

@@ -312,9 +312,11 @@ def handle_list_all_skills(ack, command, say):
 # /todays-tasks — full task list with completion status
 # ---------------------------------------------------------------------------
 
-@app.command("/todays-tasks")
-def handle_todays_tasks(ack, command, say):
-    ack()
+def _todays_tasks_ack(ack):
+    ack(text="Fetching today's tasks…", response_type="ephemeral")
+
+
+def _todays_tasks_lazy(command, say):
     from datetime import date
     from shared.github_client import GitHubClient
 
@@ -332,7 +334,6 @@ def handle_todays_tasks(ack, command, say):
         say("No active skills. Use `/learn` to start one.")
         return
 
-    # Collect tasks from each skill's daily file
     all_lines: list[str] = [f"*Tasks for {today}*\n"]
     any_found = False
     for skill in active_skills:
@@ -354,13 +355,18 @@ def handle_todays_tasks(ack, command, say):
     say("\n".join(all_lines))
 
 
+app.command("/todays-tasks")(ack=_todays_tasks_ack, lazy=[_todays_tasks_lazy])
+
+
 # ---------------------------------------------------------------------------
 # /remaining-tasks — only unchecked tasks
 # ---------------------------------------------------------------------------
 
-@app.command("/remaining-tasks")
-def handle_remaining_tasks(ack, command, say):
-    ack()
+def _remaining_tasks_ack(ack):
+    ack(text="Fetching remaining tasks…", response_type="ephemeral")
+
+
+def _remaining_tasks_lazy(command, say):
     from datetime import date
     from shared.github_client import GitHubClient
 
@@ -396,6 +402,9 @@ def handle_remaining_tasks(ack, command, say):
     say("\n".join(lines))
 
 
+app.command("/remaining-tasks")(ack=_remaining_tasks_ack, lazy=[_remaining_tasks_lazy])
+
+
 # ---------------------------------------------------------------------------
 # /reshuffle-tasks — regenerate today's plan via Planner Lambda
 # ---------------------------------------------------------------------------
@@ -419,13 +428,16 @@ app.command("/reshuffle-tasks")(ack=_reshuffle_ack, lazy=[_reshuffle_lazy])
 # /why-tasks — deterministic DAG-based explanation (no LLM)
 # ---------------------------------------------------------------------------
 
-@app.command("/why-tasks")
-def handle_why_tasks(ack, command, say):
-    ack()
-    from datetime import date
-    from shared.github_client import GitHubClient
-    from agents.planner.skill_tree import parse_skill_tree
+def _why_tasks_ack(ack):
+    ack(text="Fetching task reasoning…", response_type="ephemeral")
+
+
+def _why_tasks_lazy(command, say):
     import re
+    from datetime import date
+
+    from agents.planner.skill_tree import parse_skill_tree
+    from shared.github_client import GitHubClient
 
     gh = GitHubClient()
     today = date.today().isoformat()
@@ -445,8 +457,13 @@ def handle_why_tasks(ack, command, say):
         display = skill["display_name"]
         try:
             daily_content = gh.get_file(f"skills/{name}/daily/{today}.md")
+        except Exception as exc:
+            lines.append(f"\n*{display}* — _no daily file: {exc}_")
+            continue
+        try:
             tree = parse_skill_tree(gh.get_file(f"skills/{name}/skill-tree.md"))
-        except Exception:
+        except Exception as exc:
+            lines.append(f"\n*{display}* — _could not load skill tree: {exc}_")
             continue
 
         node_map = {n["id"]: n for n in tree.get("nodes", [])}
@@ -459,7 +476,6 @@ def handle_why_tasks(ack, command, say):
         lines.append(f"\n*{display}*")
 
         for task_line in task_lines:
-            # Extract node_id from `#node-id` at end of line
             node_match = re.search(r"`#([^`]+)`", task_line)
             if not node_match:
                 lines.append(f"{task_line}\n  _↳ No node link found._")
@@ -484,6 +500,9 @@ def handle_why_tasks(ack, command, say):
         say("No tasks found for today. The planner runs at 08:00.")
         return
     say("\n".join(lines))
+
+
+app.command("/why-tasks")(ack=_why_tasks_ack, lazy=[_why_tasks_lazy])
 
 
 # ---------------------------------------------------------------------------

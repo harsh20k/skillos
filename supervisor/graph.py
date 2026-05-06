@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -65,6 +66,68 @@ def build_supervisor_graph(gh: Optional[GitHubClient] = None):
         return {"active_skills": active}
 
     def classify_intent(state: SupervisorState) -> dict:
+        def fallback_decision(message: str, reason: str) -> dict:
+            text = message.lower().strip()
+
+            if any(k in text for k in ("pause", "resume", "skip", "reshuffle", "harder", "easier")):
+                action = None
+                if "pause" in text:
+                    action = "pause"
+                elif "resume" in text:
+                    action = "resume"
+                elif "skip" in text:
+                    action = "skip"
+                elif "reshuffle" in text or "regenerate" in text:
+                    action = "reshuffle"
+                elif "harder" in text:
+                    action = "harder"
+                elif "easier" in text:
+                    action = "easier"
+                return {
+                    "intent": "action",
+                    "action": action,
+                    "skill": None,
+                    "query_type": None,
+                    "reasoning": reason,
+                }
+
+            if any(k in text for k in ("done", "finished", "completed", "practiced")):
+                return {
+                    "intent": "track",
+                    "action": None,
+                    "skill": None,
+                    "query_type": None,
+                    "reasoning": reason,
+                }
+
+            if any(k in text for k in ("task", "tasks", "today", "remaining", "left", "why", "skill", "status", "progress")):
+                query_type = "todays_tasks"
+                if "remaining" in text or "left" in text:
+                    query_type = "remaining_tasks"
+                elif "why" in text:
+                    query_type = "why_tasks"
+                elif "all skills" in text or re.search(r"\blist skills?\b", text):
+                    query_type = "list_skills"
+                elif "status" in text or "progress on" in text or re.search(r"\bhow is\b", text):
+                    query_type = "skill_status"
+                return {
+                    "intent": "query",
+                    "action": None,
+                    "skill": None,
+                    "query_type": query_type,
+                    "reasoning": reason,
+                }
+
+            # Default unknown/ambiguous free text to intake so onboarding follow-ups
+            # (e.g. "french vocabulary basics") continue instead of dead-ending.
+            return {
+                "intent": "intake",
+                "action": None,
+                "skill": None,
+                "query_type": None,
+                "reasoning": reason,
+            }
+
         skill_names = [
             f"{s['name']} ({s['display_name']})" for s in state.get("active_skills", [])
         ]
@@ -77,7 +140,13 @@ def build_supervisor_graph(gh: Optional[GitHubClient] = None):
         decision: SupervisorDecision = structured_llm.invoke(
             [SystemMessage(content=prompt_text)]
         )
-        return {"decision": decision.model_dump()}
+        if decision is None:
+            return {"decision": fallback_decision(state["message"], "structured output parse returned None")}
+
+        parsed = decision.model_dump()
+        if parsed.get("intent") == "unknown":
+            parsed = fallback_decision(state["message"], "model returned unknown; used keyword fallback")
+        return {"decision": parsed}
 
     def run_intake(state: SupervisorState) -> dict:
         """Delegate to the Intake Lambda for multi-turn persistence."""

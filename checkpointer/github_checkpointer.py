@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import base64
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any, Dict, Iterator, Optional, Sequence
 from uuid import UUID
 
@@ -121,7 +121,7 @@ class GitHubCheckpointer(BaseCheckpointSaver):
             "thread_id": thread_id,
             "checkpoint_id": checkpoint_id,
             "checkpoint": self._serialize(checkpoint),
-            "metadata": _json_safe(meta_raw),
+            "metadata": _json_safe({**meta_raw, "written_at": datetime.now(tz=timezone.utc).isoformat()}),
         }
 
         self._gh.write_file(
@@ -166,3 +166,15 @@ class GitHubCheckpointer(BaseCheckpointSaver):
         result = self.get_tuple(config)
         if result is not None:
             yield result
+
+    def delete(self, thread_id: str) -> None:
+        """Delete the checkpoint file for a thread, clearing its history."""
+        path = self._path(thread_id)
+        sha = self._gh._get_sha(path)
+        if sha:
+            self._gh._repo.delete_file(
+                path,
+                f"checkpoint: clear {thread_id}",
+                sha,
+                branch=self._gh._branch,
+            )

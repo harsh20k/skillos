@@ -12,6 +12,7 @@ based on a parsed boolean rather than fragile string matching.
 from __future__ import annotations
 
 import json
+import re
 from datetime import date
 from typing import Annotated, Optional
 
@@ -20,10 +21,14 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
+import logging
+
 from agents.intake.github_reader import fetch_notes_for_query, fetch_notes_summary
 from agents.intake.prompt import ClarifyResponse, get_prompt as get_intake_prompt
 from shared.github_client import GitHubClient
 from shared.llm import get_llm
+
+logger = logging.getLogger(__name__)
 
 
 class IntakeState(TypedDict):
@@ -40,21 +45,101 @@ def build_intake_graph(gh: Optional[GitHubClient] = None, checkpointer=None):
     structured_llm = llm.with_structured_output(ClarifyResponse)
     _gh = gh or GitHubClient()
 
+    def _slugify(text: str) -> str:
+        slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+        return slug or "skill"
+
+    def _normalize_tree(tree: dict) -> dict:
+        """Normalize model output to canonical schema expected by write_outputs.
+
+        Canonical schema:
+        {
+          "skill_name": str,
+          "display_name": str,
+          "nodes": [{"id","label","prerequisites","duration_min","status"}]
+        }
+        """
+        if not isinstance(tree, dict):
+            raise ValueError("Skill tree must be a JSON object.")
+
+        # Some fallbacks emit {"skill_tree": {...}} wrapper.
+        payload = tree.get("skill_tree", tree) if isinstance(tree.get("skill_tree", tree), dict) else tree
+
+        skill_name = payload.get("skill_name")
+        display_name = payload.get("display_name") or payload.get("name") or "New Skill"
+        if not skill_name:
+            skill_name = _slugify(display_name)
+
+        raw_nodes = payload.get("nodes", [])
+        nodes: list[dict] = []
+        prev_id: Optional[str] = None
+        for i, raw_node in enumerate(raw_nodes):
+            if not isinstance(raw_node, dict):
+                continue
+            node_label = raw_node.get("label") or raw_node.get("name") or f"Step {i + 1}"
+            node_id = raw_node.get("id")
+            node_id = _slugify(str(node_id if node_id is not None else node_label))
+
+            prereqs = raw_node.get("prerequisites")
+            if not isinstance(prereqs, list):
+                prereqs = [prev_id] if prev_id else []
+            prereqs = [str(p) for p in prereqs if p]
+
+            duration_min = raw_node.get("duration_min")
+            if not isinstance(duration_min, int):
+                duration_min = 25
+
+            status = raw_node.get("status")
+            if status not in ("unlocked", "locked", "done", "completed"):
+                status = "unlocked" if i == 0 else "locked"
+
+            nodes.append(
+                {
+                    "id": node_id,
+                    "label": node_label,
+                    "prerequisites": prereqs,
+                    "duration_min": duration_min,
+                    "status": status,
+                }
+            )
+            prev_id = node_id
+
+        if not nodes:
+            nodes = [
+                {
+                    "id": "getting-started",
+                    "label": f"Get started with {display_name}",
+                    "prerequisites": [],
+                    "duration_min": 25,
+                    "status": "unlocked",
+                }
+            ]
+
+        return {
+            "skill_name": _slugify(skill_name),
+            "display_name": display_name,
+            "nodes": nodes,
+        }
+
     def read_notes(state: IntakeState) -> dict:
-        if state.get("notes_summary"):
+        existing = state.get("notes_summary")
+        if existing:
+            logger.info("[read_notes] notes_summary already set (%d chars) — skipping", len(existing))
             return {}
-        # Try to extract the user's goal from the first human message for RAG retrieval
         first_human = next(
             (m for m in state.get("messages", []) if isinstance(m, HumanMessage)),
             None,
         )
         query = getattr(first_human, "content", "") if first_human else ""
+        logger.info("[read_notes] query=%r", query[:120])
 
         if query:
             summary = fetch_notes_for_query(_gh, query)
         else:
+            logger.warning("[read_notes] no human message found — using full notes_summary fallback")
             summary = fetch_notes_summary(_gh)
 
+        logger.info("[read_notes] notes_summary result: %d chars", len(summary))
         return {"notes_summary": summary, "clarification_turns": 0, "done": False}
 
     def clarify(state: IntakeState) -> dict:
@@ -74,7 +159,13 @@ def build_intake_graph(gh: Optional[GitHubClient] = None, checkpointer=None):
         ]
         msgs += state["messages"]
 
-        response: ClarifyResponse = structured_llm.invoke(msgs)
+        response: Optional[ClarifyResponse] = structured_llm.invoke(msgs)
+        if response is None:
+            response = ClarifyResponse(
+                ready=False,
+                reply="Could you share one concrete outcome you want from this skill?",
+                skill_tree=None,
+            )
 
         # Store the structured response as an AI message so message history stays clean
         from langchain_core.messages import AIMessage
@@ -100,7 +191,7 @@ def build_intake_graph(gh: Optional[GitHubClient] = None, checkpointer=None):
         # Use the skill tree from the structured response if available
         resp: Optional[ClarifyResponse] = state.get("_clarify_response")
         if resp is not None and resp.skill_tree:
-            return {"skill_tree_json": resp.skill_tree}
+            return {"skill_tree_json": _normalize_tree(resp.skill_tree)}
 
         # Fallback: ask the LLM to emit the tree from conversation history
         from langchain_core.output_parsers import JsonOutputParser
@@ -116,10 +207,10 @@ def build_intake_graph(gh: Optional[GitHubClient] = None, checkpointer=None):
         else:
             json_str = raw.strip()
 
-        return {"skill_tree_json": json.loads(json_str)}
+        return {"skill_tree_json": _normalize_tree(json.loads(json_str))}
 
     def write_outputs(state: IntakeState) -> dict:
-        tree = state["skill_tree_json"]
+        tree = _normalize_tree(state["skill_tree_json"])
         skill_name = tree["skill_name"]
 
         tree_md = (
